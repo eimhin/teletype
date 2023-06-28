@@ -410,8 +410,11 @@ void handler_PollADC(int32_t data) {
         uint8_t preset = adc[1] >> 6;
         uint8_t deadzone = preset & 1;
         preset >>= 1;
-        if (!deadzone || abs(preset - get_preset()) > 1)
+        if (!deadzone || abs(preset - get_preset()) > 1) {
+            // atte: stop selection at SCENE_SLOTS, was hardcoded to 32...
+            preset = (preset < SCENE_SLOTS ? preset : (SCENE_SLOTS - 1));
             process_preset_r_preset(preset);
+        }
     }
     else {
         ss_set_param(&scene_state, adc[1] << 2);

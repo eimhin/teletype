@@ -7,7 +7,7 @@
 #include "line_editor.h"
 #include "teletype.h"
 
-#define SCENE_SLOTS 32
+#define SCENE_SLOTS 14
 
 u8 is_flash_fresh(void);
 void flash_prepare(void);

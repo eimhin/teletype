@@ -45,6 +45,30 @@ CV.SET 4 V RAND TOSS
 
 #8
 
+#N
+
+#O
+
+#Q
+
+#R
+
+#S
+
+#T
+
+#U
+
+#V
+
+#W
+
+#X
+
+#Y
+
+#Z
+
 #M
 
 #I

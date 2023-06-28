@@ -64,6 +64,30 @@ CV.SLEW 4 T
 CV 4 0
 DEL T: TR.PULSE D
 
+#N
+
+#O
+
+#Q
+
+#R
+
+#S
+
+#T
+
+#U
+
+#V
+
+#W
+
+#X
+
+#Y
+
+#Z
+
 #M
 
 #I

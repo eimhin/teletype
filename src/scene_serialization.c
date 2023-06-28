@@ -51,6 +51,30 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
             stream->write_char(stream->data, 'M');
         else if (s == INIT_SCRIPT)
             stream->write_char(stream->data, 'I');
+        else if (s == 8)
+            stream->write_char(stream->data, 'N');
+        else if (s == 9)
+            stream->write_char(stream->data, 'O');
+        else if (s == 10)
+            stream->write_char(stream->data, 'Q');
+        else if (s == 11)
+            stream->write_char(stream->data, 'R');
+        else if (s == 12)
+            stream->write_char(stream->data, 'S');
+        else if (s == 13)
+            stream->write_char(stream->data, 'T');
+        else if (s == 14)
+            stream->write_char(stream->data, 'U');
+        else if (s == 15)
+            stream->write_char(stream->data, 'V');
+        else if (s == 16)
+            stream->write_char(stream->data, 'W');
+        else if (s == 17)
+            stream->write_char(stream->data, 'X');
+        else if (s == 18)
+            stream->write_char(stream->data, 'Y');
+        else if (s == 19)
+            stream->write_char(stream->data, 'Z');
         else
             stream->write_char(stream->data, s + 49);
 
@@ -208,6 +232,54 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             else if (c == 'G') {
                 grid_state = grid_num = grid_count = 0;
                 s2 = STATE_GRID;
+            }
+            else if (c == 'N') {
+                script = 8;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'O') {
+                script = 9;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'Q') {
+                script = 10;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'R') {
+                script = 11;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'S') {
+                script = 12;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'T') {
+                script = 13;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'U') {
+                script = 14;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'V') {
+                script = 15;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'W') {
+                script = 16;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'X') {
+                script = 17;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'Y') {
+                script = 18;
+                s2 = STATE_SCRIPT;
+            }
+            else if (c == 'Z') {
+                script = 19;
+                s2 = STATE_SCRIPT;
             }
             else {
                 script = c - 49;

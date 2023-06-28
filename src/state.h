@@ -75,6 +75,7 @@ typedef struct {
     // END WARNING SECTION
     int16_t j[TOTAL_SCRIPT_COUNT];
     int16_t k[TOTAL_SCRIPT_COUNT];
+    int16_t h[TOTAL_SCRIPT_COUNT];
     int16_t cv[CV_COUNT];
     int16_t cv_off[CV_COUNT];
     int16_t cv_slew[CV_COUNT];

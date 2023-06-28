@@ -186,6 +186,8 @@ SUITE(serialize_scene_suite) {
               "./test_output/tt07.txt");
     RUN_TESTp(test_round_trip_file, "../presets/tt08.txt",
               "./test_output/tt08.txt");
+    RUN_TESTp(test_round_trip_file, "../presets/tt09.txt",
+              "./test_output/tt09.txt");
     RUN_TEST(test_deserialize_fragment_script_basic);
     log_print();
 }

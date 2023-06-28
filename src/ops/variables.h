@@ -27,5 +27,6 @@ extern const tele_op_t op_Y;
 extern const tele_op_t op_Z;
 extern const tele_op_t op_J;
 extern const tele_op_t op_K;
+extern const tele_op_t op_H;
 
 #endif

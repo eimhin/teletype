@@ -43,6 +43,7 @@
         "Z"           => { MATCH_OP(E_OP_Z); };
         "J"           => { MATCH_OP(E_OP_J); };
         "K"           => { MATCH_OP(E_OP_K); };
+        "H"           => { MATCH_OP(E_OP_H); };
 
         # init
         "INIT"            => { MATCH_OP(E_OP_INIT); };

@@ -22,4 +22,5 @@ char *line_editor_get(line_editor_t *le);
 bool line_editor_process_keys(line_editor_t *le, uint8_t key, uint8_t mod_key,
                               bool is_key_held);
 void line_editor_draw(line_editor_t *le, char prefix, region *reg);
+void line_editor_draw2(line_editor_t *le, char *prefix, region *reg);
 #endif

@@ -42,6 +42,30 @@ ES.MODE Z
 #8
 ES.CLOCK 1
 
+#N
+
+#O
+
+#Q
+
+#R
+
+#S
+
+#T
+
+#U
+
+#V
+
+#W
+
+#X
+
+#Y
+
+#Z
+
 #M
 
 #I

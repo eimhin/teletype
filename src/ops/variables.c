@@ -40,6 +40,10 @@ static void op_K_get(const void *data, scene_state_t *ss, exec_state_t *es,
                      command_state_t *cs);
 static void op_K_set(const void *data, scene_state_t *ss, exec_state_t *es,
                      command_state_t *cs);
+static void op_H_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                     command_state_t *cs);
+static void op_H_set(const void *data, scene_state_t *ss, exec_state_t *es,
+                     command_state_t *cs);
 
 // clang-format off
 const tele_op_t op_A          = MAKE_SIMPLE_VARIABLE_OP(A         , variables.a         );
@@ -67,6 +71,8 @@ const tele_op_t op_O     = MAKE_GET_SET_OP(O    , op_O_get    , op_O_set    , 0,
 const tele_op_t op_I     = MAKE_GET_SET_OP(I    , op_I_get, op_I_set, 0, true);
 const tele_op_t op_J     = MAKE_GET_SET_OP(J    , op_J_get, op_J_set, 0, true);
 const tele_op_t op_K     = MAKE_GET_SET_OP(K    , op_K_get, op_K_set, 0, true);
+const tele_op_t op_H     = MAKE_GET_SET_OP(H    , op_H_get, op_H_set, 0, true);
+
 // clang-format on
 
 static void op_TIME_get(const void *NOTUSED(data), scene_state_t *ss,
@@ -205,4 +211,16 @@ static void op_K_set(const void *NOTUSED(data), scene_state_t *ss,
     int16_t sn = es_variables(es)->script_number;
     if (sn < 0 || sn >= TOTAL_SCRIPT_COUNT) return;
     ss->variables.k[sn] = k;
+}
+
+static void op_H_get(const void *NOTUSED(data), scene_state_t *ss,
+                     exec_state_t *es, command_state_t *cs) {
+    int16_t sn = es_variables(es)->script_number;
+    cs_push(cs, ss->variables.h[sn]);
+}
+
+static void op_H_set(const void *NOTUSED(data), scene_state_t *ss,
+                     exec_state_t *es, command_state_t *cs) {
+    int16_t sn = es_variables(es)->script_number;
+    ss->variables.h[sn] = cs_pop(cs);
 }

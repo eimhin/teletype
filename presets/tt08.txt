@@ -26,6 +26,30 @@ L A D: TR.TOG I
 #8
 L A D: TR.TOG I
 
+#N
+
+#O
+
+#Q
+
+#R
+
+#S
+
+#T
+
+#U
+
+#V
+
+#W
+
+#X
+
+#Y
+
+#Z
+
 #M
 Y RSH PARAM 6
 L 1 4: CV.SLEW I Y

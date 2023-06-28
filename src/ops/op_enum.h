@@ -30,6 +30,7 @@ typedef enum {
     E_OP_Z,
     E_OP_J,
     E_OP_K,
+    E_OP_H,
     E_OP_INIT,
     E_OP_INIT_SCENE,
     E_OP_INIT_SCRIPT,

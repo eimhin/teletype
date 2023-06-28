@@ -51,6 +51,30 @@ WW.MUTE2 1
 WW.MUTE3 1
 WW.MUTE4 1
 
+#N
+
+#O
+
+#Q
+
+#R
+
+#S
+
+#T
+
+#U
+
+#V
+
+#W
+
+#X
+
+#Y
+
+#Z
+
 #M
 
 #I
