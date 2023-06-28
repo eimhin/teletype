@@ -120,7 +120,7 @@ const char* help2[HELP2_LENGTH] = { "2/17 VARIABLES",
                                     "PRINT X",
                                     "    GET/PRINT VALUE" };
 
-#define HELP3_LENGTH 74
+#define HELP3_LENGTH 78
 const char* help3[HELP3_LENGTH] = { "3/17 PARAMETERS",
                                     " ",
                                     "TR A-D|SET TR VALUE (0,1)",
@@ -130,6 +130,10 @@ const char* help3[HELP3_LENGTH] = { "3/17 PARAMETERS",
                                     "CV.SET 1-4|SET CV (NO SLEW)",
                                     "CV.GET 1-4|GET CURRENT CV",
                                     "CV.OFF 1-4|ADD CV OFFSET",
+                                    "CV.CAL 1-4 MV1V MV3V",
+                                    "    CALIBRATE CV OUTPUT",
+                                    "CV.CAL.RESET 1-4",
+                                    "    RESET CV OUT CALIBRATION",
                                     " ",
                                     "IN|GET IN JACK VAL",
                                     "IN.SCALE X Y",
@@ -1711,18 +1715,14 @@ void process_help_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_ctrl(m, k, HID_F) || match_ctrl(m, k, HID_S)) {
         search_result = SEARCH_RESULT_NONE;
         if (search_mode == SEARCH_MODE_FWD) { search_mode = SEARCH_MODE_NONE; }
-        else {
-            search_mode = SEARCH_MODE_FWD;
-        }
+        else { search_mode = SEARCH_MODE_FWD; }
         dirty = true;
     }
     // C-r: search in reverse
     else if (match_ctrl(m, k, HID_R)) {
         search_result = SEARCH_RESULT_NONE;
         if (search_mode == SEARCH_MODE_REV) { search_mode = SEARCH_MODE_NONE; }
-        else {
-            search_mode = SEARCH_MODE_REV;
-        }
+        else { search_mode = SEARCH_MODE_REV; }
         dirty = true;
     }
     else if (search_mode != SEARCH_MODE_NONE) {

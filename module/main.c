@@ -171,7 +171,7 @@ static void handler_AppCustom(int32_t data);
 
 // event queue
 static void empty_event_handlers(void);
-static void assign_main_event_handlers(void);
+void assign_main_event_handlers(void);
 static void assign_msc_event_handlers(void);
 static void check_events(void);
 
@@ -218,37 +218,47 @@ void cvTimer_callback(void* o) {
     set_slew_icon(slewing);
 
     if (updated) {
-        uint16_t a0, a1, a2, a3;
+        uint16_t output[4];
 
-        if (device_config.flip) {
-            a0 = aout[3].now >> 2;
-            a1 = aout[2].now >> 2;
-            a2 = aout[1].now >> 2;
-            a3 = aout[0].now >> 2;
-        }
-        else {
-            a0 = aout[0].now >> 2;
-            a1 = aout[1].now >> 2;
-            a2 = aout[2].now >> 2;
-            a3 = aout[3].now >> 2;
+        for (uint8_t hardware_index = 0; hardware_index < 4; hardware_index++) {
+            uint8_t software_index =
+                device_config.flip ? 3 - hardware_index : hardware_index;
+
+            // With default CV.CAL settings, skip calibration math
+            if (scene_state.cal.cv_scale[hardware_index].m == 1 &&
+                scene_state.cal.cv_scale[hardware_index].b == 0) {
+                output[hardware_index] = aout[software_index].now >> 2;
+            }
+            else {
+                // apply calibration via fixed-point linear scaling
+                int32_t p = aout[software_index].now;
+                p = p * scene_state.cal.cv_scale[hardware_index].m +
+                    scene_state.cal.cv_scale[hardware_index].b;
+
+                output[hardware_index] = (p >= 0) ? FROM_Q15(p) : 0;
+                if (output[hardware_index] > 16383) {
+                    output[hardware_index] = 16383;
+                }
+                output[hardware_index] = output[hardware_index] >> 2;
+            }
         }
 
         spi_selectChip(DAC_SPI, DAC_SPI_NPCS);
         spi_write(DAC_SPI, 0x31);
-        spi_write(DAC_SPI, a2 >> 4);
-        spi_write(DAC_SPI, a2 << 4);
+        spi_write(DAC_SPI, output[2] >> 4);
+        spi_write(DAC_SPI, output[2] << 4);
         spi_write(DAC_SPI, 0x31);
-        spi_write(DAC_SPI, a0 >> 4);
-        spi_write(DAC_SPI, a0 << 4);
+        spi_write(DAC_SPI, output[0] >> 4);
+        spi_write(DAC_SPI, output[0] << 4);
         spi_unselectChip(DAC_SPI, DAC_SPI_NPCS);
 
         spi_selectChip(DAC_SPI, DAC_SPI_NPCS);
         spi_write(DAC_SPI, 0x38);
-        spi_write(DAC_SPI, a3 >> 4);
-        spi_write(DAC_SPI, a3 << 4);
+        spi_write(DAC_SPI, output[3] >> 4);
+        spi_write(DAC_SPI, output[3] << 4);
         spi_write(DAC_SPI, 0x38);
-        spi_write(DAC_SPI, a1 >> 4);
-        spi_write(DAC_SPI, a1 << 4);
+        spi_write(DAC_SPI, output[1] >> 4);
+        spi_write(DAC_SPI, output[1] << 4);
         spi_unselectChip(DAC_SPI, DAC_SPI_NPCS);
     }
 #ifdef TELETYPE_PROFILE
@@ -416,9 +426,7 @@ void handler_PollADC(int32_t data) {
             process_preset_r_preset(preset);
         }
     }
-    else {
-        ss_set_param(&scene_state, adc[1] << 2);
-    }
+    else { ss_set_param(&scene_state, adc[1] << 2); }
 #ifdef TELETYPE_PROFILE
     profile_update(&prof_ADC);
 #endif
@@ -480,22 +488,11 @@ void handler_MscConnect(int32_t data) {
     // disable event handlers while doing USB write
     assign_msc_event_handlers();
 
-    // disable timers
-    u8 flags = irqs_pause();
-
     // clear screen
     for (size_t i = 0; i < 8; i++) {
         region_fill(&line[i], 0);
         region_draw(&line[i]);
     }
-
-    // do USB
-    tele_usb_disk();
-
-    // renable teletype
-    set_mode(M_LIVE);
-    assign_main_event_handlers();
-    irqs_resume(flags);
 }
 
 void handler_Trigger(int32_t data) {
@@ -751,8 +748,9 @@ void assign_main_event_handlers() {
 static void assign_msc_event_handlers(void) {
     empty_event_handlers();
 
-    // one day this could be used to map the front button and pot to be used as
-    // a UI with a memory stick
+    app_event_handlers[kEventFront] = &handler_usb_Front;
+    app_event_handlers[kEventPollADC] = &handler_usb_PollADC;
+    app_event_handlers[kEventScreenRefresh] = &handler_usb_ScreenRefresh;
 }
 
 // app event loop
@@ -870,9 +868,7 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_no_mod(m, k, HID_ESCAPE)) {
         if (mode == M_PRESET_R)
             set_last_mode();
-        else {
-            set_mode(M_PRESET_R);
-        }
+        else { set_mode(M_PRESET_R); }
         return true;
     }
     // alt-<esc>: preset write mode
@@ -889,9 +885,7 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift_alt(m, k, HID_SLASH) || match_alt(m, k, HID_H)) {
         if (mode == M_HELP)
             set_last_mode();
-        else {
-            set_mode(M_HELP);
-        }
+        else { set_mode(M_HELP); }
         return true;
     }
     // <F1> through <F8>: run corresponding script
@@ -958,9 +952,7 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
         if (mode != M_LIVE) { set_mode(M_LIVE); }
         return true;
     }
-    else {
-        return false;
-    }
+    else { return false; }
 }
 
 
@@ -1071,9 +1063,7 @@ void tele_tr_pulse_time(uint8_t i, int16_t time) {
     u32 time_spent = trPulseTimer[i].ticks - trPulseTimer[i].ticksRemain;
     timer_set(&trPulseTimer[i], time);
     if (time_spent >= time) { timer_manual(&trPulseTimer[i]); }
-    else {
-        trPulseTimer[i].ticksRemain = time - time_spent;
-    }
+    else { trPulseTimer[i].ticksRemain = time - time_spent; }
 }
 
 void trPulseTimer_callback(void* obj) {
@@ -1114,7 +1104,18 @@ void tele_cv_off(uint8_t i, int16_t v) {
 }
 
 uint16_t tele_get_cv(uint8_t i) {
-    return aout[(device_config.flip ? 3 - i : i)].now;
+    return aout[i].now;
+}
+
+void tele_cv_cal(uint8_t i, int32_t b, int32_t m) {
+    if (i > 3) { return; }
+    uint8_t n = device_config.flip ? 3 - i : i;
+    scene_state.cal.cv_scale[n].b = b;
+    scene_state.cal.cv_scale[n].m = m;
+    tele_save_calibration();
+
+    // force a CV output update if one is not imminent
+    if (aout[i].step == 0) { aout[i].step = 1; }
 }
 
 void tele_update_adc(u8 force) {
@@ -1168,6 +1169,13 @@ void grid_key_press(uint8_t x, uint8_t y, uint8_t z) {
 void device_flip() {
     device_config.flip = !device_config.flip;
     update_device_config(1);
+
+    for (int i = 0; i < 4; i++) {
+        // trigger a CV update if one is not imminent
+        if (aout[i].step == 0) { aout[i].step = 1; }
+        // update TR state
+        tele_tr(i, scene_state.variables.tr[i]);
+    }
 }
 
 void reset_midi_counter() {
