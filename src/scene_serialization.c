@@ -226,7 +226,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             }
             else if (c == 'P') { s2 = STATE_PATTERNS; }
             else if (c == 'G') {
-                grid_state = grid_num = grid_count = 0;
+                grid_state = grid_count = 0;
                 s2 = STATE_GRID;
             }
             else if (c == 'N') {
@@ -282,7 +282,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                 if (script < 0 || script >= EDITABLE_SCRIPT_COUNT) {
                     script = NO_SCRIPT;
                 }
-                else { s2 = STATE_SCRIPT; }
+                s2 = STATE_SCRIPT;
             }
 
             l = 0;
@@ -297,7 +297,9 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
         }
 
         if (s == STATE_SCRIPT) {
-            if (script < 0 || script >= EDITABLE_SCRIPT_COUNT) continue;
+            if (script == NO_SCRIPT || script < 0 ||
+                script >= EDITABLE_SCRIPT_COUNT)
+                continue;
 
             if (c != '\n') {
                 if (p < 32) {
@@ -400,6 +402,12 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                 }
             }
             else if (grid_state == 1) {
+                if (c >= '0' && c <= '9') {
+                    grid_num = c - '0';
+                    grid_state = 2;
+                }
+            }
+            else if (grid_state == 2) {
                 if (c >= '0' && c <= '9') {
                     grid_num = grid_num * 10 + c - '0';
                 }

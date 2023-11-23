@@ -173,11 +173,11 @@ static void handler_AppCustom(int32_t data);
 static void empty_event_handlers(void);
 void assign_main_event_handlers(void);
 static void assign_msc_event_handlers(void);
-static void check_events(void);
+void check_events(void);
 
 // key handling
-static void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
-                             bool is_release);
+void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
+                      bool is_release);
 static bool process_global_keys(uint8_t key, uint8_t mod_key, bool is_held_key);
 
 // start/stop monome polling/refresh timers
@@ -188,6 +188,8 @@ void timers_unset_monome(void);
 static void render_init(void);
 static void exit_screensaver(void);
 static void update_device_config(u8 refresh);
+
+void initialize_module(void);
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -987,11 +989,13 @@ static void setup_midi(void) {
     midi_behavior.channel_pressure = NULL;
     midi_behavior.pitch_bend = NULL;
     midi_behavior.control_change = &midi_control_change;
+    midi_behavior.program_change = NULL;
     midi_behavior.clock_tick = &midi_clock_tick;
     midi_behavior.seq_start = &midi_seq_start;
     midi_behavior.seq_stop = &midi_seq_stop;
     midi_behavior.seq_continue = &midi_seq_continue;
     midi_behavior.panic = NULL;
+    midi_behavior.aftertouch = NULL;
 }
 
 
@@ -1185,7 +1189,7 @@ void reset_midi_counter() {
 ////////////////////////////////////////////////////////////////////////////////
 // main
 
-int main(void) {
+void initialize_module(void) {
     sysclk_init();
 
     init_dbg_rs232(FMCK_HZ);
@@ -1301,7 +1305,10 @@ int main(void) {
 
     run_script(&scene_state, INIT_SCRIPT);
     scene_state.initializing = false;
+}
 
+int main(void) {
+    initialize_module();
 #ifdef TELETYPE_PROFILE
     uint32_t count = 0;
 #endif
