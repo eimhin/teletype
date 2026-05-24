@@ -211,12 +211,13 @@ void line_editor_draw(line_editor_t *le, char prefix, region *reg) {
 void line_editor_draw2(line_editor_t *le, char *prefix, region *reg) {
     // LINE_EDITOR_SIZE includes space for null, need to also include space for
     // the prefix, the space after the prefix and a space at the very end
-    char s[LINE_EDITOR_SIZE + 3];
+    char s[LINE_EDITOR_SIZE + 4];
     strcpy(s, prefix);
     strcat(s, " ");
     strcat(s, le->buffer);
     strcat(s, " ");
 
     region_fill(reg, 0);
-    font_string_region_clip_hid(reg, s, 0, 0, 0xf, 0, le->cursor + 2, 3);
+    font_string_region_clip_hid(reg, s, 0, 0, 0xf, 0,
+                                le->cursor + strlen(prefix) + 1, 3);
 }
