@@ -422,7 +422,9 @@ uint8_t screen_refresh_edit() {
                 prefix[0] = '0' + n;
                 prefix[1] = '\0';
             }
-            if (script < REGULAR_SCRIPT_COUNT)
+            if (script >= TRIGGER_INPUTS && script < REGULAR_SCRIPT_COUNT)
+                muted = true;  // no mute storage for scripts beyond TR inputs
+            else if (script < TRIGGER_INPUTS)
                 muted = ss_get_mute(&scene_state, script);
         }
 
