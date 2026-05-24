@@ -422,9 +422,7 @@ uint8_t screen_refresh_edit() {
                 prefix[0] = '0' + n;
                 prefix[1] = '\0';
             }
-            if (script >= 8 && script < REGULAR_SCRIPT_COUNT)
-                muted = true;
-            else if (script < REGULAR_SCRIPT_COUNT)
+            if (script < REGULAR_SCRIPT_COUNT)
                 muted = ss_get_mute(&scene_state, script);
         }
 
