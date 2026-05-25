@@ -1,5 +1,9 @@
 # Updates
 
+## unreleased
+
+- **NEW**: non-destructive pattern accumulator ops `P.A` / `PN.A` (offset wraps, Oxi/Metropolix style) and `P.AV` / `PN.AV` (returned value wraps, `P.+W`-equivalent), plus `ACC.CLR`. Each call returns the pattern value plus a per-cell offset, then advances the offset by `step`; the underlying pattern is never modified.
+
 ## v5.0.0
 
 - **FIX**: fix off-by-one error in `P.ROT` understanding of pattern length

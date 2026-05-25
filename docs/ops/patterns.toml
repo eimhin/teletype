@@ -267,6 +267,56 @@ short = "decrease the value of the working pattern at index `x` by `y` and wrap 
 prototype = "PN.-W x y z a b"
 short = "decrease the value of pattern `x` at index `y` by `z` and wrap it to `a`..`b` range"
 
+["P.A"]
+prototype = "P.A x y n a b"
+short = "non-destructive accumulator: return active pattern[`x`] + per-cell offset, then advance the offset by `y` wrapping in `a`..`b`; if `n` > 0 the offset resets every `n`-th call"
+description = """
+Returns `P x` plus a per-cell accumulator offset, then advances that offset by
+`y`, wrapping the offset modulo `a`..`b` (Oxi/Metropolix-style — bounds the
+amount of accumulation, not the absolute pitch). The pattern value itself is
+never modified.
+
+Pass `n` = 0 to disable the auto-reset counter; otherwise the offset (and the
+per-cell trigger counter) snap back to 0 every `n`-th call. For an
+ever-growing offset, use a wide range like `a` = -16384, `b` = 16383.
+
+State is per-cell and per-pattern (8 patterns × 64 cells), held in RAM only —
+not persisted to flash. Use `ACC.CLR` to zero all accumulators (typically from
+the init script).
+"""
+
+["PN.A"]
+prototype = "PN.A x y z n a b"
+short = "as `P.A`, but on pattern `x` at index `y` with step `z`, reset count `n` and offset wrap `a`..`b`"
+
+["P.AV"]
+prototype = "P.AV x y n a b"
+short = "as `P.A`, but the returned value is wrapped in `a`..`b` (reproduces `P.+W`'s sequence non-destructively)"
+
+["PN.AV"]
+prototype = "PN.AV x y z n a b"
+short = "as `P.AV`, but on pattern `x`"
+
+["P.AH"]
+prototype = "P.AH y n a b"
+short = "as `P.A`, but operates at the active pattern's current position (no `x` arg)"
+
+["PN.AH"]
+prototype = "PN.AH x y n a b"
+short = "as `PN.A`, but operates at pattern `x`'s current position"
+
+["P.AVH"]
+prototype = "P.AVH y n a b"
+short = "as `P.AV`, but operates at the active pattern's current position"
+
+["PN.AVH"]
+prototype = "PN.AVH x y n a b"
+short = "as `PN.AV`, but operates at pattern `x`'s current position"
+
+["ACC.CLR"]
+prototype = "ACC.CLR"
+short = "zero all `P.A` / `P.AV` accumulator offsets and counters across every pattern; intended for the init script"
+
 ["P.MAP"]
 prototype = "P.MAP: ..."
 short = "apply the 'function' to each value in the active pattern, `I` takes each pattern value"

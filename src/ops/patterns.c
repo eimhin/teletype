@@ -1,5 +1,7 @@
 #include "ops/patterns.h"
 
+#include <string.h>
+
 #include "helpers.h"
 #include "random.h"
 #include "teletype.h"
@@ -1038,6 +1040,162 @@ const tele_op_t op_P_SUB = MAKE_GET_OP(P.-, op_P_SUB_get, 2, false);
 const tele_op_t op_PN_SUB = MAKE_GET_OP(PN.-, op_PN_SUB_get, 3, false);
 const tele_op_t op_P_SUBW = MAKE_GET_OP(P.-W, op_P_SUBW_get, 4, false);
 const tele_op_t op_PN_SUBW = MAKE_GET_OP(PN.-W, op_PN_SUBW_get, 5, false);
+// clang-format on
+
+////////////////////////////////////////////////////////////////////////////////
+// P.A family //////////////////////////////////////////////////////////////////
+//
+// Non-destructive per-cell accumulator. Returns P[i] + offset[i] (or a wrapped
+// variant thereof), then advances offset[i] by `step`. If `n > 0`, snaps both
+// offset[i] and the per-cell trigger counter to 0 every n-th call. Pattern
+// values are never modified.
+
+// Variant of the accumulator: which side of the addition gets wrapped.
+typedef enum {
+    P_ACC_WRAP_OFFSET,  // wrap(offset + step, min, max)
+    P_ACC_WRAP_VALUE,   // returned value wrapped; offset grows unbounded
+} p_acc_mode_t;
+
+static int16_t p_acc_step(scene_state_t *ss, int16_t pn, int16_t idx,
+                          int16_t step, int16_t n, p_acc_mode_t mode,
+                          int16_t min, int16_t max) {
+    pn = normalise_pn(pn);
+    idx = normalise_idx(ss, pn, idx);
+
+    int16_t offset = ss->p_acc_offset[pn][idx];
+    int16_t base = ss_get_pattern_val(ss, pn, idx);
+    int16_t result = (mode == P_ACC_WRAP_VALUE) ? wrap(base + offset, min, max)
+                                                : (int16_t)(base + offset);
+
+    ss->p_acc_count[pn][idx]++;
+    if (n > 0 && ss->p_acc_count[pn][idx] >= (uint16_t)n) {
+        ss->p_acc_offset[pn][idx] = 0;
+        ss->p_acc_count[pn][idx] = 0;
+    }
+    else {
+        int16_t next = offset + step;
+        if (mode == P_ACC_WRAP_OFFSET) next = wrap(next, min, max);
+        ss->p_acc_offset[pn][idx] = next;
+    }
+
+    return result;
+}
+
+// P.A i step n min max  — offset wraps in [min, max]
+static void op_P_ACC_get(const void *NOTUSED(data), scene_state_t *ss,
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t idx = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, ss->variables.p_n, idx, step, n,
+                           P_ACC_WRAP_OFFSET, min, max));
+}
+
+// PN.A pn i step n min max
+static void op_PN_ACC_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t idx = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_OFFSET, min, max));
+}
+
+// P.AV i step n min max
+static void op_P_ACCV_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t idx = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, ss->variables.p_n, idx, step, n,
+                           P_ACC_WRAP_VALUE, min, max));
+}
+
+// PN.AV pn i step n min max
+static void op_PN_ACCV_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t idx = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_VALUE, min, max));
+}
+
+// P.AH step n min max  — like P.A but uses the current pattern position.
+static void op_P_ACC_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                              exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_OFFSET, min, max));
+}
+
+// PN.AH pn step n min max
+static void op_PN_ACC_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                               exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_OFFSET, min, max));
+}
+
+// P.AVH step n min max
+static void op_P_ACCV_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                               exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_VALUE, min, max));
+}
+
+// PN.AVH pn step n min max
+static void op_PN_ACCV_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                                exec_state_t *NOTUSED(es),
+                                command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t min = cs_pop(cs);
+    int16_t max = cs_pop(cs);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, P_ACC_WRAP_VALUE, min, max));
+}
+
+// ACC.CLR — zero all accumulator offsets and counters across all patterns.
+static void op_ACC_CLR_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es),
+                           command_state_t *NOTUSED(cs)) {
+    memset(ss->p_acc_offset, 0, sizeof(ss->p_acc_offset));
+    memset(ss->p_acc_count, 0, sizeof(ss->p_acc_count));
+}
+
+// clang-format off
+const tele_op_t op_P_ACC         = MAKE_GET_OP(P.A,       op_P_ACC_get,         5, true);
+const tele_op_t op_PN_ACC        = MAKE_GET_OP(PN.A,      op_PN_ACC_get,        6, true);
+const tele_op_t op_P_ACCV        = MAKE_GET_OP(P.AV,      op_P_ACCV_get,        5, true);
+const tele_op_t op_PN_ACCV       = MAKE_GET_OP(PN.AV,     op_PN_ACCV_get,       6, true);
+const tele_op_t op_P_ACC_HERE    = MAKE_GET_OP(P.AH,      op_P_ACC_HERE_get,    4, true);
+const tele_op_t op_PN_ACC_HERE   = MAKE_GET_OP(PN.AH,     op_PN_ACC_HERE_get,   5, true);
+const tele_op_t op_P_ACCV_HERE   = MAKE_GET_OP(P.AVH,     op_P_ACCV_HERE_get,   4, true);
+const tele_op_t op_PN_ACCV_HERE  = MAKE_GET_OP(PN.AVH,    op_PN_ACCV_HERE_get,  5, true);
+const tele_op_t op_ACC_CLR       = MAKE_GET_OP(ACC.CLR,   op_ACC_CLR_get,       0, false);
 // clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////

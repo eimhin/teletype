@@ -23,6 +23,8 @@ void ss_init(scene_state_t *ss) {
         ss->variables.n_scale_root[i] = 0;
     }
     ss->stack_op.top = 0;
+    memset(ss->p_acc_offset, 0, sizeof(ss->p_acc_offset));
+    memset(ss->p_acc_count, 0, sizeof(ss->p_acc_count));
     memset(&ss->scripts, 0, ss_scripts_size(TOTAL_SCRIPT_COUNT));
     turtle_init(&ss->turtle);
     uint32_t ticks = tele_get_ticks();

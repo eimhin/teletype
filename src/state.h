@@ -272,6 +272,12 @@ typedef struct {
     cal_data_t cal;
     int8_t i2c_op_address;
     scene_midi_t midi;
+    // Per-cell accumulator state for the P.A* op family. Runtime-only —
+    // intentionally not persisted in nvram_scene_t. BSS-zeroed at boot.
+    // Survives plain scene-load (flash_read does not call ss_init) but is
+    // cleared by INIT / INIT.SCENE and by ACC.CLR.
+    int16_t p_acc_offset[PATTERN_COUNT][PATTERN_LENGTH];
+    uint16_t p_acc_count[PATTERN_COUNT][PATTERN_LENGTH];
 } scene_state_t;
 
 extern void ss_init(scene_state_t *ss);
