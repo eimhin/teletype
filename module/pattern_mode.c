@@ -611,17 +611,14 @@ uint8_t screen_refresh_pattern() {
         line[(offset + y) >> 3].data[((offset + y) & 0x7) * 128 + 8] = 6;
     }
 
-    // Page indicator: vertical dot column at x=10, aligned with the scrollbar
-    // highlight (1-pixel gap between scrollbar at x=8 and dots at x=10). Dots
-    // spread across the 8-pixel indicator height; the current page's dot is
-    // bright (intensity 6), others are dim (intensity 1).
-    if (PATTERN_PAGE_COUNT > 1) {
-        for (uint8_t i = 0; i < PATTERN_PAGE_COUNT; i++) {
-            uint8_t yr = (uint8_t)((i * 7) / (PATTERN_PAGE_COUNT - 1));
-            uint8_t y_abs = offset + yr;
-            uint8_t intensity = (i == pattern_page) ? 6 : 1;
-            line[y_abs >> 3].data[(y_abs & 0x7) * 128 + 10] = intensity;
-        }
+    // Page indicator: partition the scrollbar highlight on pages beyond the
+    // first. The highlight is 8 px tall (even), so a centered partition uses
+    // 2 dim pixels (intensity 1, matching the scrollbar background) at
+    // y_relative = 3 and 4 — splitting the highlight into 3+2+3. Page 1 stays
+    // solid (current behavior).
+    if (pattern_page > 0) {
+        line[(offset + 3) >> 3].data[((offset + 3) & 0x7) * 128 + 8] = 1;
+        line[(offset + 4) >> 3].data[((offset + 4) & 0x7) * 128 + 8] = 1;
     }
 
     dirty = false;
