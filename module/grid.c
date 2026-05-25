@@ -309,12 +309,14 @@ void grid_control_refresh(scene_state_t *ss) {
     if (tt_mode == G_TRACKER) {
         monomeLedBuffer[d + 7] = mode_on;
         u8 offset = get_pattern_offset(), in, off, rem;
+        u8 page_base = get_pattern_page() * 4;
         for (u16 j = 0; j < 8; j++) {
             for (u16 i = 0; i < 4; i++) {
-                in = offset + j >= ss_get_pattern_start(ss, i) &&
-                     offset + j <= ss_get_pattern_end(ss, i);
+                u8 p = page_base + i;
+                in = offset + j >= ss_get_pattern_start(ss, p) &&
+                     offset + j <= ss_get_pattern_end(ss, p);
                 monomeLedBuffer[d + i + 2 + (j << 4)] =
-                    ss_get_pattern_val(ss, i, j + offset)
+                    ss_get_pattern_val(ss, p, j + offset)
                         ? tracker_on
                         : (in ? tracker_in : tracker_out);
             }
@@ -326,7 +328,7 @@ void grid_control_refresh(scene_state_t *ss) {
                                          : tracker_page_off);
         }
         for (u16 i = 0; i < 4; i++) {
-            u8 index = ss_get_pattern_idx(ss, i);
+            u8 index = ss_get_pattern_idx(ss, page_base + i);
             if (index >= offset && index <= offset + 7) {
                 monomeLedBuffer[d + i + 2 + (index << 4)] += tracker_pos;
             }
@@ -334,6 +336,9 @@ void grid_control_refresh(scene_state_t *ss) {
 
         d += 32;
         monomeLedBuffer[d + 7] = tracker_control;
+        // y == 1 in control column: pattern-page toggle indicator
+        monomeLedBuffer[d - 16 + 7] =
+            get_pattern_page() ? tracker_page_on : tracker_page_off;
         d += 16;
         monomeLedBuffer[d + 7] =
             turtle_get_shown(&ss->turtle) ? tracker_control : tracker_loop;
@@ -556,25 +561,27 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
     // tracker
     if (tt_mode == G_TRACKER) {
         u8 offset = get_pattern_offset();
+        u8 page_base = get_pattern_page() * 4;
 
         if (x == 7 && y == 4) tracker_set_start = z;
         if (x == 7 && y == 5) tracker_set_end = z;
 
         if (tracker_pressed) {
-            s16 value =
-                ss_get_pattern_val(ss, tracker_x - 2, tracker_y + offset);
+            s16 value = ss_get_pattern_val(ss, page_base + tracker_x - 2,
+                                           tracker_y + offset);
 
             if (x == tracker_x && y == tracker_y && !z) {
                 if (!tracker_changed) {
                     s16 value = ss_get_pattern_val(
-                        ss, tracker_x - 2, tracker_y + get_pattern_offset());
+                        ss, page_base + tracker_x - 2,
+                        tracker_y + get_pattern_offset());
                     if (value) {
                         tracker_last = value;
                         value = 0;
                     }
                     else { value = tracker_last ? tracker_last : 1; }
-                    ss_set_pattern_val(ss, tracker_x - 2, tracker_y + offset,
-                                       value);
+                    ss_set_pattern_val(ss, page_base + tracker_x - 2,
+                                       tracker_y + offset, value);
                 }
                 tracker_pressed = 0;
                 tele_pattern_updated();
@@ -588,38 +595,38 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
             if (y == tracker_y) {
                 if (x == tracker_x + 1) {
                     if (value < 32767) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, value + 1);
                         updated = 1;
                     }
                 }
                 else if (x == tracker_x + 2) {
                     if (value < 32758) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, value + 10);
                         updated = 1;
                     }
                     else if (value < 32767) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, 32767);
                         updated = 1;
                     }
                 }
                 else if (x == tracker_x - 1) {
                     if (value > -32768) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, value - 1);
                         updated = 1;
                     }
                 }
                 else if (x == tracker_x - 2) {
                     if (value > -32759) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, value - 10);
                         updated = 1;
                     }
                     else if (value > -32768) {
-                        ss_set_pattern_val(ss, tracker_x - 2,
+                        ss_set_pattern_val(ss, page_base + tracker_x - 2,
                                            tracker_y + offset, -32768);
                         updated = 1;
                     }
@@ -629,9 +636,11 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
                 // set loop
                 if (from_held) return 1;
                 for (u8 i = min(tracker_x, x); i <= max(tracker_x, x); i++) {
-                    ss_set_pattern_start(ss, i - 2, min(y, tracker_y) + offset);
-                    ss_set_pattern_end(ss, i - 2, max(y, tracker_y) + offset);
-                    ss_set_pattern_len(ss, i - 2,
+                    ss_set_pattern_start(ss, page_base + i - 2,
+                                         min(y, tracker_y) + offset);
+                    ss_set_pattern_end(ss, page_base + i - 2,
+                                       max(y, tracker_y) + offset);
+                    ss_set_pattern_len(ss, page_base + i - 2,
                                        max(y, tracker_y) + offset + 1);
                 }
                 updated = 1;
@@ -659,14 +668,14 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
                 if (tracker_select == 2) {
                     // set current position
                     tracker_selected = 1;
-                    ss_set_pattern_idx(ss, x - 2, offset + y);
+                    ss_set_pattern_idx(ss, page_base + x - 2, offset + y);
                     tele_pattern_updated();
                     ss->grid.grid_dirty = 1;
                 }
                 else if (tracker_select == 3) {
                     // set turtle position
                     tracker_selected = 1;
-                    turtle_set_x(&ss->turtle, x - 2);
+                    turtle_set_x(&ss->turtle, page_base + x - 2);
                     turtle_set_y(&ss->turtle, offset + y);
                     turtle_set_shown(&ss->turtle, 1);
                     tele_pattern_updated();
@@ -674,15 +683,15 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
                 }
                 if (tracker_set_start) {
                     // set start
-                    ss_set_pattern_start(ss, x - 2, y + offset);
+                    ss_set_pattern_start(ss, page_base + x - 2, y + offset);
                     tracker_selected = 1;
                     tele_pattern_updated();
                     ss->grid.grid_dirty = 1;
                 }
                 if (tracker_set_end) {
                     // set end
-                    ss_set_pattern_end(ss, x - 2, y + offset);
-                    ss_set_pattern_len(ss, x - 2, y + offset + 1);
+                    ss_set_pattern_end(ss, page_base + x - 2, y + offset);
+                    ss_set_pattern_len(ss, page_base + x - 2, y + offset + 1);
                     tracker_selected = 1;
                     tele_pattern_updated();
                     ss->grid.grid_dirty = 1;
@@ -698,13 +707,20 @@ static u8 grid_control_process_key(scene_state_t *ss, u8 x, u8 y, u8 z,
             tracker_changed = 0;
             tracker_x = x;
             tracker_y = y;
-            set_pattern_selected_value(x - 2, y);
+            set_pattern_selected_value(page_base + x - 2, y);
             tele_pattern_updated();
             ss->grid.grid_dirty = 1;
         }
         else if (x == 7 && y == 0 && !from_held && z) {
             // exit tracker
             restore_last_mode(ss);
+            ss->grid.grid_dirty = 1;
+        }
+        else if (x == 7 && y == 1 && !from_held && z) {
+            // toggle pattern page (1-4 <-> 5-8)
+            u8 pages = (PATTERN_COUNT + 3) / 4;
+            if (pages > 1)
+                set_pattern_page((get_pattern_page() + 1) % pages);
             ss->grid.grid_dirty = 1;
         }
         else if (x == 0 && !from_held && z) {

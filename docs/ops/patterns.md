@@ -1,5 +1,5 @@
 ## Patterns
-Patterns facilitate musical data manipulation– lists of numbers that can be used as sequences, chord sets, rhythms, or whatever you choose. Pattern memory consists four banks of 64 steps. Functions are provided for a variety of pattern creation, transformation, and playback.
+Patterns facilitate musical data manipulation– lists of numbers that can be used as sequences, chord sets, rhythms, or whatever you choose. Pattern memory consists of eight banks of 64 steps. Functions are provided for a variety of pattern creation, transformation, and playback.
 
 New in teletype 2.0, a second version of all Pattern ops have been added. The original `P` ops (`P`, `P.L`, `P.NEXT`, etc.) act upon the ‘working pattern’ as defined by `P.N`. By default the working pattern is assigned to pattern 0 (`P.N 0`), in order to execute a command on pattern 1 using `P` ops you would need to first reassign the working pattern to pattern 1 (`P.N 1`). 
 
@@ -9,7 +9,7 @@ Both patterns and their arrays of numbers are indexed from 0. This makes the fir
 
 Values can be edited, added, and retrieved from the command line using ops: `P`, `P.INS`, `P.RM`, `P.PUSH`, `P.HERE`, `P.NEXT`, and `P.PREV`. Some of these ops will additionally impact the pattern length upon their execution: `P.INS`, `P.RM`, `P.PUSH`, and `P.POP`.
 
-To see your current pattern data use the `<tab>` key to cycle through live mode, edit mode, and pattern mode. In pattern mode each of the 4 patterns is represented as a column. You can use the arrow keys to navigate throughout the 4 patterns and their 64 values. For reference a key of numbers runs the down the lefthand side of the screen in pattern mode displaying 0-63.
+To see your current pattern data use the `<tab>` key to cycle through live mode, edit mode, and pattern mode. In pattern mode 4 of the 8 patterns are represented as columns at a time, with a page indicator in the top right showing which page (1/2 or 2/2) is currently visible. You can use the arrow keys to navigate throughout the patterns and their 64 values — arrows auto-wrap across the page boundary, and `shift-<left>` / `shift-<right>` flip directly between pages without moving the cursor column. For reference a key of numbers runs down the lefthand side of the screen in pattern mode displaying 0-63.
  
 From a blank set of patterns you can enter data by typing into the first cell in a column. Once you hit `<enter>` you will move to the cell below and the pattern length will become one step long. You can continue this process to write out a pattern of desired length. The step you are editing is always the brightest. As you add steps to a pattern by editing the value and hitting `<enter>` they become brighter than the unused cells. This provides a visual indication of the pattern length.
 

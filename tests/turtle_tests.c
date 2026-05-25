@@ -124,10 +124,14 @@ TEST test_turtle_fence_oob() {
     CHECK_CALL(process_helper(2, test1, 0));
     char *test2[2] = { "@F -1 -1 4 100", "@FY1" };
     CHECK_CALL(process_helper(2, test2, 0));
+    // x2=4 is within bounds for PATTERN_COUNT=8 (max 7), so it is not clamped
     char *test3[2] = { "@F -1 -1 4 100", "@FX2" };
-    CHECK_CALL(process_helper(2, test3, 3));
+    CHECK_CALL(process_helper(2, test3, 4));
     char *test4[2] = { "@F -1 -1 4 100", "@FY2" };
     CHECK_CALL(process_helper(2, test4, 63));
+    // values past PATTERN_COUNT-1 still clamp
+    char *test5[2] = { "@F 0 0 100 100", "@FX2" };
+    CHECK_CALL(process_helper(2, test5, 7));
     PASS();
 }
 TEST test_turtle_fence_individual() {
@@ -160,10 +164,13 @@ TEST test_turtle_fence_ind_oob() {
     CHECK_CALL(process_helper(2, test1, 0));
     char *test2[2] = { "@FY1 -1", "@FY1" };
     CHECK_CALL(process_helper(2, test2, 0));
+    // 4 is within bounds for PATTERN_COUNT=8 (max 7), so it is not clamped
     char *test3[2] = { "@FX2 4", "@FX2" };
-    CHECK_CALL(process_helper(2, test3, 3));
+    CHECK_CALL(process_helper(2, test3, 4));
     char *test4[2] = { "@FY2 63", "@FY2" };
     CHECK_CALL(process_helper(2, test4, 63));
+    char *test5[2] = { "@FX2 100", "@FX2" };
+    CHECK_CALL(process_helper(2, test5, 7));
     // TODO more tests
     PASS();
 }

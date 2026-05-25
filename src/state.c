@@ -466,14 +466,14 @@ bool skip_is_now(scene_state_t *ss, every_count_t *e) {
 int16_t ss_turtle_get_val(scene_state_t *ss, scene_turtle_t *st) {
     turtle_position_t p;
     turtle_resolve_position(st, &st->position, &p);
-    if (p.x > 3 || p.x < 0 || p.y > 63 || p.y < 0) return 0;
+    if (p.x >= PATTERN_COUNT || p.x < 0 || p.y > 63 || p.y < 0) return 0;
     return ss_get_pattern_val(ss, p.x, p.y);
 }
 
 void ss_turtle_set_val(scene_state_t *ss, scene_turtle_t *st, int16_t val) {
     turtle_position_t p;
     turtle_resolve_position(st, &st->position, &p);
-    if (p.x > 3 || p.x < 0 || p.y > 63 || p.y < 0) return;
+    if (p.x >= PATTERN_COUNT || p.x < 0 || p.y > 63 || p.y < 0) return;
     ss_set_pattern_val(ss, p.x, p.y, val);
 }
 

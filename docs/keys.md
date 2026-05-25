@@ -98,10 +98,12 @@ The tracker mode clipboard is independent of text and code clipboard.
 | **`alt-<down>`**        | move a page down                                                                      |
 | **`<up>`**              | move up                                                                               |
 | **`alt-<up>`**          | move a page up                                                                        |
-| **`<left>`**            | move left                                                                             |
+| **`<left>`**            | move left (wraps across pattern pages and end-to-end)                                 |
 | **`alt-<left>`**        | move to the very left                                                                 |
-| **`<right>`**           | move right                                                                            |
+| **`shift-<left>`**      | flip to previous pattern page (cursor column unchanged)                               |
+| **`<right>`**           | move right (wraps across pattern pages and end-to-end)                                |
 | **`alt-<right>`**       | move to the very right                                                                |
+| **`shift-<right>`**     | flip to next pattern page (cursor column unchanged)                                   |
 | **`[`**                 | decrement by 1                                                                        |
 | **`]`**                 | increment by 1                                                                        |
 | **`alt-[`**             | decrement by 1 semitone                                                               |

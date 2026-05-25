@@ -20,8 +20,19 @@
 #include "conf_usb_host.h"  // needed in order to include "usb_protocol_hid.h"
 #include "usb_protocol_hid.h"
 
+// Invariant: PATTERN_COUNT must be a multiple of PATTERNS_PER_PAGE. The OLED
+// tracker renders a full page of PATTERNS_PER_PAGE columns and the circular
+// arrow wrap targets column PATTERNS_PER_PAGE - 1 on the last page; a partial
+// last page would index ss->patterns[] out of bounds (state.c accessors do
+// no clamping). If PATTERN_COUNT is bumped to a non-multiple, the per-page
+// loops here and the wrap target need to clamp against PATTERN_COUNT.
+#define PATTERNS_PER_PAGE 4
+#define PATTERN_PAGE_COUNT \
+    ((PATTERN_COUNT + PATTERNS_PER_PAGE - 1) / PATTERNS_PER_PAGE)
+
 static int16_t value_copy_buffer;
-static uint8_t pattern;  // which pattern are we editting
+static uint8_t pattern;  // column within current page (0..PATTERNS_PER_PAGE-1)
+static uint8_t pattern_page;  // 0..PATTERN_PAGE_COUNT-1
 static uint8_t base;     // base + offset determine what we are editting
 static uint8_t offset;
 
@@ -29,6 +40,10 @@ static bool dirty;
 static bool editing_number;
 static int32_t edit_buffer;
 static bool edit_negative;
+
+static inline uint8_t abs_pattern(void) {
+    return pattern_page * PATTERNS_PER_PAGE + pattern;
+}
 
 // teletype_io.h
 void tele_pattern_updated() {
@@ -52,8 +67,20 @@ void set_pattern_offset(uint8_t o) {
     dirty = true;
 }
 
+uint8_t get_pattern_page() {
+    return pattern_page;
+}
+
+void set_pattern_page(uint8_t page) {
+    if (page >= PATTERN_PAGE_COUNT) page = PATTERN_PAGE_COUNT - 1;
+    pattern_page = page;
+    dirty = true;
+}
+
 void set_pattern_selected_value(uint8_t p, uint8_t offset) {
-    pattern = p;
+    if (p >= PATTERN_COUNT) p = PATTERN_COUNT - 1;
+    pattern_page = p / PATTERNS_PER_PAGE;
+    pattern = p % PATTERNS_PER_PAGE;
     base = offset;
     dirty = true;
 }
@@ -107,9 +134,9 @@ void note_nudge(int8_t semitones) {
     }
     else {
         int16_t pattern_val =
-            ss_get_pattern_val(&scene_state, pattern, base + offset);
+            ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
         int16_t new_val = transpose_n_value(pattern_val, semitones);
-        ss_set_pattern_val(&scene_state, pattern, base + offset, new_val);
+        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, new_val);
     }
     dirty = true;
 }
@@ -140,10 +167,18 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         }
         dirty = true;
     }
-    // <left>: move left
+    // <left>: move left (auto-wraps to previous page; wraps around end-to-end)
     else if (match_no_mod(m, k, HID_LEFT)) {
         editing_number = false;
-        if (pattern > 0) pattern--;
+        if (pattern > 0) { pattern--; }
+        else if (pattern_page > 0) {
+            pattern_page--;
+            pattern = PATTERNS_PER_PAGE - 1;
+        }
+        else {
+            pattern_page = PATTERN_PAGE_COUNT - 1;
+            pattern = PATTERNS_PER_PAGE - 1;
+        }
         dirty = true;
     }
     // alt-<left>: move to the very left
@@ -153,10 +188,27 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         offset = 0;
         dirty = true;
     }
-    // <right>: move right
+    // shift-<left>: flip to previous pattern page (cursor column unchanged)
+    else if (match_shift(m, k, HID_LEFT)) {
+        editing_number = false;
+        if (PATTERN_PAGE_COUNT > 1) {
+            pattern_page = (pattern_page + PATTERN_PAGE_COUNT - 1)
+                           % PATTERN_PAGE_COUNT;
+            dirty = true;
+        }
+    }
+    // <right>: move right (auto-wraps to next page; wraps around end-to-end)
     else if (match_no_mod(m, k, HID_RIGHT)) {
         editing_number = false;
-        if (pattern < 3) pattern++;
+        if (pattern < PATTERNS_PER_PAGE - 1) { pattern++; }
+        else if (pattern_page < PATTERN_PAGE_COUNT - 1) {
+            pattern_page++;
+            pattern = 0;
+        }
+        else {
+            pattern_page = 0;
+            pattern = 0;
+        }
         dirty = true;
     }
     // alt-<right>: move to the very right
@@ -165,6 +217,14 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         base = 7;
         offset = 56;
         dirty = true;
+    }
+    // shift-<right>: flip to next pattern page (cursor column unchanged)
+    else if (match_shift(m, k, HID_RIGHT)) {
+        editing_number = false;
+        if (PATTERN_PAGE_COUNT > 1) {
+            pattern_page = (pattern_page + 1) % PATTERN_PAGE_COUNT;
+            dirty = true;
+        }
     }
     // [: decrement by 1
     else if (match_no_mod(m, k, HID_OPEN_BRACKET)) {
@@ -177,12 +237,12 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         }
         else {
             int16_t v =
-                ss_get_pattern_val(&scene_state, pattern, base + offset);
+                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
             if (v == INT16_MIN)
-                ss_set_pattern_val(&scene_state, pattern, base + offset,
+                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                                    INT16_MAX);
             else
-                ss_set_pattern_val(&scene_state, pattern, base + offset, v - 1);
+                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, v - 1);
             dirty = true;
         }
     }
@@ -197,12 +257,12 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         }
         else {
             int16_t v =
-                ss_get_pattern_val(&scene_state, pattern, base + offset);
+                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
             if (v == INT16_MAX)
-                ss_set_pattern_val(&scene_state, pattern, base + offset,
+                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                                    INT16_MIN);
             else
-                ss_set_pattern_val(&scene_state, pattern, base + offset, v + 1);
+                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, v + 1);
             dirty = true;
         }
     }
@@ -239,7 +299,7 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         else {
             editing_number = true;
             edit_buffer =
-                ss_get_pattern_val(&scene_state, pattern, base + offset) / 10;
+                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset) / 10;
         }
         dirty = true;
     }
@@ -247,26 +307,26 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift(m, k, HID_BACKSPACE)) {
         editing_number = false;
         for (size_t i = base + offset; i < 63; i++) {
-            int16_t v = ss_get_pattern_val(&scene_state, pattern, i + 1);
-            ss_set_pattern_val(&scene_state, pattern, i, v);
+            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i + 1);
+            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
         }
 
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
-        if (l > base + offset) ss_set_pattern_len(&scene_state, pattern, l - 1);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
+        if (l > base + offset) ss_set_pattern_len(&scene_state, abs_pattern(), l - 1);
         dirty = true;
     }
     // <enter>: commit edit, extend pattern length
     else if (match_no_mod(m, k, HID_ENTER)) {
         // commit an edit if active
         if (editing_number) {
-            ss_set_pattern_val(&scene_state, pattern, base + offset,
+            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                                edit_buffer);
             editing_number = false;
             edit_negative = false;
         }
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (base + offset == l && l < 64)
-            ss_set_pattern_len(&scene_state, pattern, l + 1);
+            ss_set_pattern_len(&scene_state, abs_pattern(), l + 1);
         dirty = true;
     }
     // shift-<enter>: duplicate entry and shift downwards (increase length only
@@ -274,18 +334,18 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift(m, k, HID_ENTER)) {
         // commit an edit before duplication
         if (editing_number) {
-            ss_set_pattern_val(&scene_state, pattern, base + offset,
+            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                                edit_buffer);
             editing_number = false;
             edit_negative = false;
         }
         for (int i = 63; i > base + offset; i--) {
-            int16_t v = ss_get_pattern_val(&scene_state, pattern, i - 1);
-            ss_set_pattern_val(&scene_state, pattern, i, v);
+            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i - 1);
+            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
         }
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (base + offset == l && l < 64) {
-            ss_set_pattern_len(&scene_state, pattern, l + 1);
+            ss_set_pattern_len(&scene_state, abs_pattern(), l + 1);
         }
         dirty = true;
     }
@@ -293,15 +353,15 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_alt(m, k, HID_X)) {
         editing_number = false;
         value_copy_buffer =
-            ss_get_pattern_val(&scene_state, pattern, base + offset);
+            ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
         for (int i = base + offset; i < 63; i++) {
-            int16_t v = ss_get_pattern_val(&scene_state, pattern, i + 1);
-            ss_set_pattern_val(&scene_state, pattern, i, v);
+            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i + 1);
+            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
         }
 
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (l > base + offset) {
-            ss_set_pattern_len(&scene_state, pattern, l - 1);
+            ss_set_pattern_len(&scene_state, abs_pattern(), l - 1);
         }
         dirty = true;
     }
@@ -311,12 +371,12 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             value_copy_buffer = edit_buffer;
         else
             value_copy_buffer =
-                ss_get_pattern_val(&scene_state, pattern, base + offset);
+                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
     }
     // alt-v: paste value (n.b. ctrl-v not supported)
     else if (match_alt(m, k, HID_V)) {
         editing_number = false;
-        ss_set_pattern_val(&scene_state, pattern, base + offset,
+        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                            value_copy_buffer);
         dirty = true;
     }
@@ -324,27 +384,27 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift_alt(m, k, HID_V)) {
         editing_number = false;
         for (int i = 63; i > base + offset; i--) {
-            int16_t v = ss_get_pattern_val(&scene_state, pattern, i - 1);
-            ss_set_pattern_val(&scene_state, pattern, i, v);
+            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i - 1);
+            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
         }
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (l >= base + offset && l < 63) {
-            ss_set_pattern_len(&scene_state, pattern, l + 1);
+            ss_set_pattern_len(&scene_state, abs_pattern(), l + 1);
         }
-        ss_set_pattern_val(&scene_state, pattern, base + offset,
+        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
                            value_copy_buffer);
         dirty = true;
     }
     // shift-l: set length to current position
     else if (match_shift(m, k, HID_L)) {
         editing_number = false;
-        ss_set_pattern_len(&scene_state, pattern, base + offset + 1);
+        ss_set_pattern_len(&scene_state, abs_pattern(), base + offset + 1);
         dirty = true;
     }
     // alt-l: go to current length entry
     else if (match_alt(m, k, HID_L)) {
         editing_number = false;
-        uint16_t l = ss_get_pattern_len(&scene_state, pattern);
+        uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (l) {
             offset = ((l - 1) >> 3) << 3;
             base = (l - 1) & 0x7;
@@ -363,13 +423,13 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     // shift-s: set start to current position
     else if (match_shift(m, k, HID_S)) {
         editing_number = false;
-        ss_set_pattern_start(&scene_state, pattern, offset + base);
+        ss_set_pattern_start(&scene_state, abs_pattern(), offset + base);
         dirty = true;
     }
     // alt-s: go to start entry
     else if (match_alt(m, k, HID_S)) {
         editing_number = false;
-        int16_t start = ss_get_pattern_start(&scene_state, pattern);
+        int16_t start = ss_get_pattern_start(&scene_state, abs_pattern());
         if (start) {
             offset = (start >> 3) << 3;
             base = start & 0x7;
@@ -388,13 +448,13 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     // shift-e: set end to current position
     else if (match_shift(m, k, HID_E)) {
         editing_number = false;
-        ss_set_pattern_end(&scene_state, pattern, offset + base);
+        ss_set_pattern_end(&scene_state, abs_pattern(), offset + base);
         dirty = true;
     }
     // alt-e: go to end entry
     else if (match_alt(m, k, HID_E)) {
         editing_number = false;
-        int16_t end = ss_get_pattern_end(&scene_state, pattern);
+        int16_t end = ss_get_pattern_end(&scene_state, abs_pattern());
         if (end) {
             offset = (end >> 3) << 3;
             base = end & 0x7;
@@ -412,7 +472,7 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     }
     // -: negate value
     else if (match_no_mod(m, k, HID_UNDERSCORE)) {
-        int16_t v = ss_get_pattern_val(&scene_state, pattern, base + offset);
+        int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
         if (v == 0 && !editing_number) {
             editing_number = true;
             edit_buffer = 0;
@@ -423,16 +483,16 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             else
                 edit_buffer *= -1;
         }
-        else { ss_set_pattern_val(&scene_state, pattern, base + offset, -v); }
+        else { ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, -v); }
         dirty = true;
     }
     // <space>: toggle non-zero to zero, and zero to 1
     else if (match_no_mod(m, k, HID_SPACEBAR)) {
         editing_number = false;
-        if (ss_get_pattern_val(&scene_state, pattern, base + offset))
-            ss_set_pattern_val(&scene_state, pattern, base + offset, 0);
+        if (ss_get_pattern_val(&scene_state, abs_pattern(), base + offset))
+            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, 0);
         else
-            ss_set_pattern_val(&scene_state, pattern, base + offset, 1);
+            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, 1);
         dirty = true;
     }
     else if (match_shift(m, k, HID_2)) {
@@ -471,11 +531,11 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
 
 void process_pattern_knob(uint16_t knob, uint8_t m) {
     if (mod_only_ctrl_alt(m)) {
-        ss_set_pattern_val(&scene_state, pattern, base + offset, knob >> 7);
+        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, knob >> 7);
         dirty = true;
     }
     else if (mod_only_shift_ctrl(m)) {
-        ss_set_pattern_val(&scene_state, pattern, base + offset, knob >> 2);
+        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, knob >> 2);
         dirty = true;
     }
 }
@@ -489,23 +549,24 @@ uint8_t screen_refresh_pattern() {
         itoa(y + offset, s, 10);
         font_string_region_clip_right(&line[y], s, 4, 0, 0x1, 0);
 
-        for (uint8_t x = 0; x < 4; x++) {
+        for (uint8_t x = 0; x < PATTERNS_PER_PAGE; x++) {
+            uint8_t p = pattern_page * PATTERNS_PER_PAGE + x;
             uint8_t a = 1;
-            if (ss_get_pattern_len(&scene_state, x) > y + offset) a = 6;
+            if (ss_get_pattern_len(&scene_state, p) > y + offset) a = 6;
 
-            itoa(ss_get_pattern_val(&scene_state, x, y + offset), s, 10);
+            itoa(ss_get_pattern_val(&scene_state, p, y + offset), s, 10);
             font_string_region_clip_right(&line[y], s, (x + 1) * 30 + 4, 0, a,
                                           0);
 
-            if (y + offset >= ss_get_pattern_start(&scene_state, x)) {
-                if (y + offset <= ss_get_pattern_end(&scene_state, x)) {
+            if (y + offset >= ss_get_pattern_start(&scene_state, p)) {
+                if (y + offset <= ss_get_pattern_end(&scene_state, p)) {
                     for (uint8_t i = 0; i < 8; i += 2) {
                         line[y].data[i * 128 + (x + 1) * 30 + 6] = 1;
                     }
                 }
             }
 
-            if (y + offset == ss_get_pattern_idx(&scene_state, x)) {
+            if (y + offset == ss_get_pattern_idx(&scene_state, p)) {
                 line[y].data[2 * 128 + (x + 1) * 30 + 6] = 11;
                 line[y].data[3 * 128 + (x + 1) * 30 + 6] = 11;
                 line[y].data[4 * 128 + (x + 1) * 30 + 6] = 11;
@@ -526,7 +587,7 @@ uint8_t screen_refresh_pattern() {
         }
     }
     else {
-        itoa(ss_get_pattern_val(&scene_state, pattern, base + offset), s, 10);
+        itoa(ss_get_pattern_val(&scene_state, abs_pattern(), base + offset), s, 10);
         font_string_region_clip_right(&line[base], s, (pattern + 1) * 30 + 4, 0,
                                       0xf, 0);
     }
@@ -534,10 +595,21 @@ uint8_t screen_refresh_pattern() {
     if (scene_state.turtle.shown) {
         int16_t y = turtle_get_y(&scene_state.turtle);
         int16_t x = turtle_get_x(&scene_state.turtle);
-        if (y >= offset && y < offset + 8) {
+        int16_t col = x - pattern_page * PATTERNS_PER_PAGE;
+        if (y >= offset && y < offset + 8 && col >= 0
+            && col < PATTERNS_PER_PAGE) {
             font_string_region_clip_right(&line[y - offset], "<",
-                                          (x + 1) * 30 + 9, 0, 0xf, 0);
+                                          (col + 1) * 30 + 9, 0, 0xf, 0);
         }
+    }
+
+    if (PATTERN_PAGE_COUNT > 1) {
+        char ps[4];
+        ps[0] = '0' + pattern_page + 1;
+        ps[1] = '/';
+        ps[2] = '0' + PATTERN_PAGE_COUNT;
+        ps[3] = 0;
+        font_string_region_clip_right(&line[0], ps, 128, 0, 0x6, 0);
     }
 
 

@@ -11,7 +11,10 @@
 // this
 #include "teletype.h"
 
-#define FIRSTRUN_KEY 0x22
+// Bumped when nvram_data_t layout changes (PATTERN_COUNT 4 -> 8 grew
+// nvram_scene_t by 552 B, shifting f.fresh to a new flash offset). A new
+// key forces flash_prepare() to reseed on first boot after upgrade.
+#define FIRSTRUN_KEY 0x23
 
 static grid_data_t grid_data;
 

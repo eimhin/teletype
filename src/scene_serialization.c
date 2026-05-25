@@ -91,37 +91,37 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
     stream->write_char(stream->data, 'P');
     stream->write_char(stream->data, '\n');
 
-    for (int b = 0; b < 4; b++) {
+    for (int b = 0; b < PATTERN_COUNT; b++) {
         itoa(ss_get_pattern_len(scene, b), input, 10);
         stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
-        if (b == 3)
+        if (b == PATTERN_COUNT - 1)
             stream->write_char(stream->data, '\n');
         else
             stream->write_char(stream->data, '\t');
     }
 
-    for (int b = 0; b < 4; b++) {
+    for (int b = 0; b < PATTERN_COUNT; b++) {
         itoa(ss_get_pattern_wrap(scene, b), input, 10);
         stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
-        if (b == 3)
+        if (b == PATTERN_COUNT - 1)
             stream->write_char(stream->data, '\n');
         else
             stream->write_char(stream->data, '\t');
     }
 
-    for (int b = 0; b < 4; b++) {
+    for (int b = 0; b < PATTERN_COUNT; b++) {
         itoa(ss_get_pattern_start(scene, b), input, 10);
         stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
-        if (b == 3)
+        if (b == PATTERN_COUNT - 1)
             stream->write_char(stream->data, '\n');
         else
             stream->write_char(stream->data, '\t');
     }
 
-    for (int b = 0; b < 4; b++) {
+    for (int b = 0; b < PATTERN_COUNT; b++) {
         itoa(ss_get_pattern_end(scene, b), input, 10);
         stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
-        if (b == 3)
+        if (b == PATTERN_COUNT - 1)
             stream->write_char(stream->data, '\n');
         else
             stream->write_char(stream->data, '\t');
@@ -130,10 +130,10 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
     stream->write_char(stream->data, '\n');
 
     for (int l = 0; l < 64; l++) {
-        for (int b = 0; b < 4; b++) {
+        for (int b = 0; b < PATTERN_COUNT; b++) {
             itoa(ss_get_pattern_val(scene, b, l), input, 10);
             stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
-            if (b == 3)
+            if (b == PATTERN_COUNT - 1)
                 stream->write_char(stream->data, '\n');
             else
                 stream->write_char(stream->data, '\t');
@@ -351,7 +351,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             // tele_patterns[]. l wrap start end v[64]
 
             if (c == '\n' || c == '\t') {
-                if (b < 4) {
+                if (b < PATTERN_COUNT) {
                     if (l > 3) {
                         ss_set_pattern_val(scene, b, l - 4, neg * num);
                         // stream->print_dbg("\r\nset: ");

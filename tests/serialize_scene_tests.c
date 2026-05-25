@@ -1,5 +1,6 @@
 #include "serialize_scene_tests.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -141,6 +142,94 @@ TEST test_round_trip_file(char* filename, char* tempfile) {
     PASS();
 }
 
+// Round-trip patterns 0..PATTERN_COUNT-1 with distinct values, ensuring all
+// pattern slots survive serialise/deserialise.
+TEST test_round_trip_all_patterns() {
+    scene_state_t scene_a, scene_b;
+    ss_init(&scene_a);
+    ss_init(&scene_b);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        ss_set_pattern_len(&scene_a, p, 1 + p);
+        ss_set_pattern_wrap(&scene_a, p, p & 1);
+        ss_set_pattern_start(&scene_a, p, p);
+        ss_set_pattern_end(&scene_a, p, p + 1);
+        for (int i = 0; i < PATTERN_LENGTH; i++) {
+            ss_set_pattern_val(&scene_a, p, i, (int16_t)(p * 100 + i));
+        }
+    }
+
+    char buffer[32768];
+    memset(buffer, 0, sizeof(buffer));
+    stringsource out_ss = { .buffer = buffer,
+                            .length = 0,
+                            .position = 0 };
+    test_string_writer.data = (void*)&out_ss;
+    serialize_scene(&test_string_writer, &scene_a, &text);
+
+    stringsource in_ss = { .buffer = buffer,
+                           .length = out_ss.length,
+                           .position = 0 };
+    test_string_reader.data = (void*)&in_ss;
+    deserialize_scene(&test_string_reader, &scene_b, &text);
+
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        ASSERT_EQ(1 + p, ss_get_pattern_len(&scene_b, p));
+        ASSERT_EQ(p & 1, ss_get_pattern_wrap(&scene_b, p));
+        ASSERT_EQ(p, ss_get_pattern_start(&scene_b, p));
+        ASSERT_EQ(p + 1, ss_get_pattern_end(&scene_b, p));
+        for (int i = 0; i < PATTERN_LENGTH; i++) {
+            ASSERT_EQ((int16_t)(p * 100 + i),
+                      ss_get_pattern_val(&scene_b, p, i));
+        }
+    }
+    PASS();
+}
+
+// Loading an old-format scene (4 patterns) must zero-initialise extra slots.
+TEST test_deserialize_legacy_4pattern_scene() {
+    scene_state_t scene;
+    ss_init(&scene);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    // Minimal #P block in the old 4-pattern-per-row format. Pattern 0 has
+    // len=2, wrap=1, start=0, end=1 and values 5,6 in positions 0,1.
+    char fragment[8192];
+    int p = 0;
+    p += snprintf(fragment + p, sizeof(fragment) - p,
+                  "#P\n2\t0\t0\t0\n1\t0\t0\t0\n0\t0\t0\t0\n1\t0\t0\t0\n\n");
+    p += snprintf(fragment + p, sizeof(fragment) - p, "5\t0\t0\t0\n");
+    p += snprintf(fragment + p, sizeof(fragment) - p, "6\t0\t0\t0\n");
+    for (int i = 2; i < 64; i++)
+        p += snprintf(fragment + p, sizeof(fragment) - p, "0\t0\t0\t0\n");
+
+    deserialize_fragment(fragment, &scene, &text);
+
+    ASSERT_EQ(2, ss_get_pattern_len(&scene, 0));
+    ASSERT_EQ(1, ss_get_pattern_wrap(&scene, 0));
+    ASSERT_EQ(0, ss_get_pattern_start(&scene, 0));
+    ASSERT_EQ(1, ss_get_pattern_end(&scene, 0));
+    ASSERT_EQ(5, ss_get_pattern_val(&scene, 0, 0));
+    ASSERT_EQ(6, ss_get_pattern_val(&scene, 0, 1));
+
+    // patterns 4..PATTERN_COUNT-1 must remain at init defaults — the old
+    // 4-pattern format does not touch them.
+    for (int pat = 4; pat < PATTERN_COUNT; pat++) {
+        ASSERT_EQ(0, ss_get_pattern_len(&scene, pat));
+        ASSERT_EQ(1, ss_get_pattern_wrap(&scene, pat));  // ss_pattern_init
+        ASSERT_EQ(0, ss_get_pattern_start(&scene, pat));
+        ASSERT_EQ(63, ss_get_pattern_end(&scene, pat));  // ss_pattern_init
+        for (int i = 0; i < PATTERN_LENGTH; i++)
+            ASSERT_EQ(0, ss_get_pattern_val(&scene, pat, i));
+    }
+    PASS();
+}
+
 TEST test_deserialize_fragment_script_basic() {
     scene_state_t scene;
     ss_init(&scene);
@@ -188,6 +277,8 @@ SUITE(serialize_scene_suite) {
               "./test_output/tt08.txt");
     RUN_TESTp(test_round_trip_file, "../presets/tt09.txt",
               "./test_output/tt09.txt");
+    RUN_TEST(test_round_trip_all_patterns);
+    RUN_TEST(test_deserialize_legacy_4pattern_scene);
     RUN_TEST(test_deserialize_fragment_script_basic);
     log_print();
 }
