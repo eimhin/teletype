@@ -603,22 +603,24 @@ uint8_t screen_refresh_pattern() {
         }
     }
 
-    if (PATTERN_PAGE_COUNT > 1) {
-        char ps[4];
-        ps[0] = '0' + pattern_page + 1;
-        ps[1] = '/';
-        ps[2] = '0' + PATTERN_PAGE_COUNT;
-        ps[3] = 0;
-        font_string_region_clip_right(&line[0], ps, 128, 0, 0x6, 0);
-    }
-
-
     for (uint8_t y = 0; y < 64; y += 2) {
         line[y >> 3].data[(y & 0x7) * 128 + 8] = 1;
     }
 
     for (uint8_t y = 0; y < 8; y++) {
         line[(offset + y) >> 3].data[((offset + y) & 0x7) * 128 + 8] = 6;
+    }
+
+    // Page indicator: vertical dot column at x=9, aligned with the scrollbar
+    // highlight. Dots spread across the 8-pixel indicator height; the current
+    // page's dot is bright (intensity 6), others are dim (intensity 1).
+    if (PATTERN_PAGE_COUNT > 1) {
+        for (uint8_t i = 0; i < PATTERN_PAGE_COUNT; i++) {
+            uint8_t yr = (uint8_t)((i * 7) / (PATTERN_PAGE_COUNT - 1));
+            uint8_t y_abs = offset + yr;
+            uint8_t intensity = (i == pattern_page) ? 6 : 1;
+            line[y_abs >> 3].data[(y_abs & 0x7) * 128 + 9] = intensity;
+        }
     }
 
     dirty = false;
