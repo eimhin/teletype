@@ -126,6 +126,7 @@ typedef struct {
     int16_t start;
     int16_t end;
     int16_t val[PATTERN_LENGTH];
+    int16_t dur[PATTERN_LENGTH];
 } scene_pattern_t;
 
 typedef struct {
@@ -278,6 +279,12 @@ typedef struct {
     // cleared by INIT / INIT.SCENE and by ACC.CLR.
     int16_t p_acc_offset[PATTERN_COUNT][PATTERN_LENGTH];
     uint16_t p_acc_count[PATTERN_COUNT][PATTERN_LENGTH];
+    // Per-pattern dwell counter and stage-change flag for P.STEP. Runtime
+    // only — not persisted. dwell increments each P.STEP; idx advances
+    // when dwell exceeds the current cell's dur[]. just_advanced is 1
+    // only on the tick the idx moved (read via P.STEP.NEW).
+    uint16_t p_dwell[PATTERN_COUNT];
+    uint8_t p_just_advanced[PATTERN_COUNT];
 } scene_state_t;
 
 extern void ss_init(scene_state_t *ss);
@@ -315,6 +322,10 @@ extern int16_t ss_get_pattern_val(scene_state_t *ss, size_t pattern,
                                   size_t idx);
 extern void ss_set_pattern_val(scene_state_t *ss, size_t pattern, size_t idx,
                                int16_t val);
+extern int16_t ss_get_pattern_dur(scene_state_t *ss, size_t pattern,
+                                  size_t idx);
+extern void ss_set_pattern_dur(scene_state_t *ss, size_t pattern, size_t idx,
+                               int16_t dur);
 extern scene_pattern_t *ss_patterns_ptr(scene_state_t *ss);
 extern size_t ss_patterns_size(void);
 

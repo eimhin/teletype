@@ -25,6 +25,8 @@ void ss_init(scene_state_t *ss) {
     ss->stack_op.top = 0;
     memset(ss->p_acc_offset, 0, sizeof(ss->p_acc_offset));
     memset(ss->p_acc_count, 0, sizeof(ss->p_acc_count));
+    memset(ss->p_dwell, 0, sizeof(ss->p_dwell));
+    memset(ss->p_just_advanced, 0, sizeof(ss->p_just_advanced));
     memset(&ss->scripts, 0, ss_scripts_size(TOTAL_SCRIPT_COUNT));
     turtle_init(&ss->turtle);
     uint32_t ticks = tele_get_ticks();
@@ -103,7 +105,10 @@ void ss_pattern_init(scene_state_t *ss, size_t pattern_no) {
     p->wrap = 1;
     p->start = 0;
     p->end = 63;
-    for (size_t i = 0; i < PATTERN_LENGTH; i++) { p->val[i] = 0; }
+    for (size_t i = 0; i < PATTERN_LENGTH; i++) {
+        p->val[i] = 0;
+        p->dur[i] = 1;
+    }
 }
 
 // grid
@@ -291,6 +296,16 @@ int16_t ss_get_pattern_val(scene_state_t *ss, size_t pattern, size_t idx) {
 void ss_set_pattern_val(scene_state_t *ss, size_t pattern, size_t idx,
                         int16_t val) {
     ss->patterns[pattern].val[idx] = val;
+}
+
+int16_t ss_get_pattern_dur(scene_state_t *ss, size_t pattern, size_t idx) {
+    return ss->patterns[pattern].dur[idx];
+}
+
+void ss_set_pattern_dur(scene_state_t *ss, size_t pattern, size_t idx,
+                        int16_t dur) {
+    if (dur < 1) dur = 1;
+    ss->patterns[pattern].dur[idx] = dur;
 }
 
 scene_pattern_t *ss_patterns_ptr(scene_state_t *ss) {

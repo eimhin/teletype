@@ -14,7 +14,9 @@
 // Bumped when nvram_data_t layout changes (PATTERN_COUNT 4 -> 8 grew
 // nvram_scene_t by 552 B, shifting f.fresh to a new flash offset). A new
 // key forces flash_prepare() to reseed on first boot after upgrade.
-#define FIRSTRUN_KEY 0x24
+// 0x25: scene_pattern_t gained dur[PATTERN_LENGTH] for the duration-aware
+// P.STEP family — wipes existing scenes on first boot.
+#define FIRSTRUN_KEY 0x25
 
 static grid_data_t grid_data;
 
