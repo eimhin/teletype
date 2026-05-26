@@ -359,8 +359,7 @@ TEST test_P_ROT_3() {
     PASS();
 }
 
-// P.A: emit-then-advance, non-destructive, reset-every-n,
-// offset wraps in [min, max].
+// P.A: unbounded accumulator. Emit base+offset, advance offset by step.
 TEST test_P_ACC() {
     scene_state_t ss;
     ss_init(&ss);
@@ -368,28 +367,25 @@ TEST test_P_ACC() {
     char* prep[3] = { "P.N 0", "PN 0 0 100", "PN 0 0" };
     CHECK_CALL(process_helper_state(&ss, 3, prep, 100));
 
-    // step=2, n=0, offset wraps in [0, 5].
-    // offset sequence: 0,2,4, wrap(6,0,5)=0, 2, 4, ...
-    // returned: 100, 102, 104, 100, 102, 104, ...
-    char* t[1] = { "P.A 0 2 0 0 5" };
+    // step=2, n=0 (no reset): 100, 102, 104, 106, ...
+    char* t[1] = { "P.A 0 2 0" };
     CHECK_CALL(process_helper_state(&ss, 1, t, 100));
     CHECK_CALL(process_helper_state(&ss, 1, t, 102));
     CHECK_CALL(process_helper_state(&ss, 1, t, 104));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 100));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 102));
+    CHECK_CALL(process_helper_state(&ss, 1, t, 106));
 
-    // Pattern value itself must be untouched.
+    // Pattern value untouched.
     char* read_base[1] = { "PN 0 0" };
     CHECK_CALL(process_helper_state(&ss, 1, read_base, 100));
 
-    // ACC.CLR rezeroes all offsets. Use a follow-up GET to assert.
-    char* clr_then_read[2] = { "ACC.CLR", "P.A 0 2 0 0 5" };
+    // ACC.CLR rezeroes all offsets.
+    char* clr_then_read[2] = { "ACC.CLR", "P.A 0 2 0" };
     CHECK_CALL(process_helper_state(&ss, 2, clr_then_read, 100));
 
-    // Reset-every-n: with n=3, step=1, sequence is 100,101,102,100,101,102,...
-    char* clr_then_read2[2] = { "ACC.CLR", "P.A 0 1 3 0 100" };
+    // Reset-every-n: step=1, n=3 -> 100, 101, 102, 100, 101, ...
+    char* clr_then_read2[2] = { "ACC.CLR", "P.A 0 1 3" };
     CHECK_CALL(process_helper_state(&ss, 2, clr_then_read2, 100));
-    char* t2[1] = { "P.A 0 1 3 0 100" };
+    char* t2[1] = { "P.A 0 1 3" };
     CHECK_CALL(process_helper_state(&ss, 1, t2, 101));
     CHECK_CALL(process_helper_state(&ss, 1, t2, 102));
     CHECK_CALL(process_helper_state(&ss, 1, t2, 100));
@@ -398,63 +394,23 @@ TEST test_P_ACC() {
     PASS();
 }
 
-// P.AV: bounds the RETURNED VALUE, reproducing P.+W's destructive sequence.
-TEST test_P_ACCV() {
+// P.A.W: same as P.A but the offset wraps in [min, max].
+TEST test_P_ACC_W() {
     scene_state_t ss;
     ss_init(&ss);
 
-    char* prep[3] = { "P.N 0", "PN 0 0 5", "PN 0 0" };
-    CHECK_CALL(process_helper_state(&ss, 3, prep, 5));
+    char* prep[3] = { "P.N 0", "PN 0 0 100", "PN 0 0" };
+    CHECK_CALL(process_helper_state(&ss, 3, prep, 100));
 
-    // step=2, n=0, wrap in [0,10]. Note: shared wrap() helper treats `b` as
-    // exclusive of the next wrap point, so wrap(11,0,10)=0 (modulus 11).
-    // offset: 0,2,4,6,8,10,12,14,16,...
-    // returned (= wrap(5+offset,0,10)):
-    //   5, 7, 9, 0, 2, 4, 6, 8, 10, ...
-    char* t[1] = { "P.AV 0 2 0 0 10" };
-    CHECK_CALL(process_helper_state(&ss, 1, t, 5));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 7));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 9));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 0));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 2));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 4));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 6));
-
-    // Pattern itself unmodified.
-    char* base[1] = { "PN 0 0" };
-    CHECK_CALL(process_helper_state(&ss, 1, base, 5));
-
-    PASS();
-}
-
-// P.AH: uses the current pattern position implicitly (no i arg).
-TEST test_P_ACC_HERE() {
-    scene_state_t ss;
-    ss_init(&ss);
-
-    // Set up pattern 0 with values at indices 0..2 and position the playhead
-    // at 1.
-    char* prep[7] = { "P.N 0",     "P.L 3", "PN 0 0 10", "PN 0 1 20",
-                      "PN 0 2 30", "P.I 1", "P.I" };
-    CHECK_CALL(process_helper_state(&ss, 7, prep, 1));
-
-    // P.AH step=2 n=0 min=0 max=10 -> uses idx=1, base=20.
-    // returned: 20, 22, 24, 26, 28, wrap(30,0,10)=30-11=8 -> 28? recompute.
-    // offset 0,2,4,6,8,wrap(10,0,10)=10; results 20,22,24,26,28,30
-    char* t[1] = { "P.AH 2 0 0 10" };
-    CHECK_CALL(process_helper_state(&ss, 1, t, 20));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 22));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 24));
-
-    // Advance playhead to 0 -> next call uses base 10.
-    char* advance[1] = { "P.I 0" };
-    process_helper_state(&ss, 1, advance, 0);
-    CHECK_CALL(process_helper_state(&ss, 1, t, 10));
-    CHECK_CALL(process_helper_state(&ss, 1, t, 12));
-
-    // Pattern values untouched.
-    char* read[1] = { "PN 0 1" };
-    CHECK_CALL(process_helper_state(&ss, 1, read, 20));
+    // step=2, n=0, offset wraps in [0, 5].
+    // offset sequence: 0, 2, 4, wrap(6,0,5)=0, 2, 4, ...
+    // returned: 100, 102, 104, 100, 102, 104, ...
+    char* t[1] = { "P.A.W 0 2 0 5 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, t, 100));
+    CHECK_CALL(process_helper_state(&ss, 1, t, 102));
+    CHECK_CALL(process_helper_state(&ss, 1, t, 104));
+    CHECK_CALL(process_helper_state(&ss, 1, t, 100));
+    CHECK_CALL(process_helper_state(&ss, 1, t, 102));
 
     PASS();
 }
@@ -464,11 +420,12 @@ TEST test_PN_ACC_family() {
     scene_state_t ss;
     ss_init(&ss);
 
-    // Set p_n to 3 to confirm PN.A does not consult it.
+    // Set p_n to 3 to confirm PN.* does not consult it.
     char* prep[3] = { "P.N 3", "PN 1 0 200", "P.N" };
     CHECK_CALL(process_helper_state(&ss, 3, prep, 3));
 
-    char* t[1] = { "PN.A 1 0 5 0 0 1000" };
+    // PN.A pn=1 i=0 step=5 n=0 -> 200, 205, 210
+    char* t[1] = { "PN.A 1 0 5 0" };
     CHECK_CALL(process_helper_state(&ss, 1, t, 200));
     CHECK_CALL(process_helper_state(&ss, 1, t, 205));
     CHECK_CALL(process_helper_state(&ss, 1, t, 210));
@@ -477,33 +434,14 @@ TEST test_PN_ACC_family() {
     char* check_pn[1] = { "P.N" };
     CHECK_CALL(process_helper_state(&ss, 1, check_pn, 3));
 
-    // PN.AV: same as P.AV but with explicit pattern. Use pattern 2.
-    char* prep2[2] = { "PN 2 0 5", "PN 2 0" };
-    CHECK_CALL(process_helper_state(&ss, 2, prep2, 5));
-    char* tv[1] = { "PN.AV 2 0 2 0 0 10" };
-    CHECK_CALL(process_helper_state(&ss, 1, tv, 5));
-    CHECK_CALL(process_helper_state(&ss, 1, tv, 7));
-    CHECK_CALL(process_helper_state(&ss, 1, tv, 9));
-    CHECK_CALL(process_helper_state(&ss, 1, tv, 0));
-
-    // PN.AH: HERE variant on explicit pattern. Position pattern 4's playhead.
-    char* prep3[5] = { "PN 4 0 100", "PN 4 1 200", "PN.L 4 2", "PN.I 4 1",
-                       "PN.I 4" };
-    CHECK_CALL(process_helper_state(&ss, 5, prep3, 1));
-    char* th[1] = { "PN.AH 4 5 0 0 1000" };
-    CHECK_CALL(process_helper_state(&ss, 1, th, 200));
-    CHECK_CALL(process_helper_state(&ss, 1, th, 205));
-    CHECK_CALL(process_helper_state(&ss, 1, th, 210));
-
-    // PN.AVH: value-wrap HERE on explicit pattern. Pattern 5.
-    char* prep4[5] = { "PN 5 0 5", "PN 5 1 50", "PN.L 5 2", "PN.I 5 0",
-                       "PN.I 5" };
-    CHECK_CALL(process_helper_state(&ss, 5, prep4, 0));
-    char* tvh[1] = { "PN.AVH 5 2 0 0 10" };
-    CHECK_CALL(process_helper_state(&ss, 1, tvh, 5));
-    CHECK_CALL(process_helper_state(&ss, 1, tvh, 7));
-    CHECK_CALL(process_helper_state(&ss, 1, tvh, 9));
-    CHECK_CALL(process_helper_state(&ss, 1, tvh, 0));
+    // PN.A.W: offset wraps. Pattern 2.
+    char* prep2[2] = { "PN 2 0 50", "PN 2 0" };
+    CHECK_CALL(process_helper_state(&ss, 2, prep2, 50));
+    char* tw[1] = { "PN.A.W 2 0 2 0 5 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, tw, 50));
+    CHECK_CALL(process_helper_state(&ss, 1, tw, 52));
+    CHECK_CALL(process_helper_state(&ss, 1, tw, 54));
+    CHECK_CALL(process_helper_state(&ss, 1, tw, 50));
 
     PASS();
 }
@@ -525,7 +463,6 @@ SUITE(process_suite) {
     RUN_TEST(test_P_ROT_1);
     RUN_TEST(test_P_ROT_3);
     RUN_TEST(test_P_ACC);
-    RUN_TEST(test_P_ACCV);
-    RUN_TEST(test_P_ACC_HERE);
+    RUN_TEST(test_P_ACC_W);
     RUN_TEST(test_PN_ACC_family);
 }

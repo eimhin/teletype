@@ -2,7 +2,7 @@
 
 ## unreleased
 
-- **NEW**: non-destructive pattern accumulator ops `P.A` / `PN.A` (offset wraps, Oxi/Metropolix style) and `P.AV` / `PN.AV` (returned value wraps, `P.+W`-equivalent), plus `ACC.CLR`. Each call returns the pattern value plus a per-cell offset, then advances the offset by `step`; the underlying pattern is never modified.
+- **NEW**: non-destructive pattern accumulator ops `P.A` / `PN.A` (unbounded) and `P.A.W` / `PN.A.W` (Oxi/Metropolix-style offset wrap), plus `ACC.CLR` to reset all accumulator state. Each call returns the pattern value plus a per-cell offset, then advances the offset by `step`; the underlying pattern is never modified.
 
 ## v5.0.0
 

@@ -134,12 +134,8 @@
         "PN.-W"       => { MATCH_OP(E_OP_PN_SUBW); };
         "P.A"         => { MATCH_OP(E_OP_P_ACC); };
         "PN.A"        => { MATCH_OP(E_OP_PN_ACC); };
-        "P.AV"        => { MATCH_OP(E_OP_P_ACCV); };
-        "PN.AV"       => { MATCH_OP(E_OP_PN_ACCV); };
-        "P.AH"        => { MATCH_OP(E_OP_P_ACC_HERE); };
-        "PN.AH"       => { MATCH_OP(E_OP_PN_ACC_HERE); };
-        "P.AVH"       => { MATCH_OP(E_OP_P_ACCV_HERE); };
-        "PN.AVH"      => { MATCH_OP(E_OP_PN_ACCV_HERE); };
+        "P.A.W"       => { MATCH_OP(E_OP_P_ACC_W); };
+        "PN.A.W"      => { MATCH_OP(E_OP_PN_ACC_W); };
         "ACC.CLR"     => { MATCH_OP(E_OP_ACC_CLR); };
 
         # queue
