@@ -1042,6 +1042,134 @@ const tele_op_t op_P_SUBW = MAKE_GET_OP(P.-W, op_P_SUBW_get, 4, false);
 const tele_op_t op_PN_SUBW = MAKE_GET_OP(PN.-W, op_PN_SUBW_get, 5, false);
 // clang-format on
 
+
+////////////////////////////////////////////////////////////////////////////////
+// P.D, PN.D, P.D.HERE, PN.D.HERE, P.D.RND, PN.D.RND ///////////////////////////
+// Per-cell dwell duration (ticks) used by P.STEP. Mirrors the val[]
+// accessor family (P, P.HERE) plus an in-place randomiser.
+
+static int16_t p_d_get(scene_state_t *ss, int16_t pn, int16_t idx) {
+    pn = normalise_pn(pn);
+    idx = normalise_idx(ss, pn, idx);
+    return ss_get_pattern_dur(ss, pn, idx);
+}
+
+static void p_d_set(scene_state_t *ss, int16_t pn, int16_t idx, int16_t dur) {
+    pn = normalise_pn(pn);
+    idx = normalise_idx(ss, pn, idx);
+    // ss_set_pattern_dur clamps dur < 1 to 1.
+    ss_set_pattern_dur(ss, pn, idx, dur);
+    tele_pattern_updated();
+}
+
+static void op_P_D_get(const void *NOTUSED(data), scene_state_t *ss,
+                       exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = ss->variables.p_n;
+    int16_t a = cs_pop(cs);
+    cs_push(cs, p_d_get(ss, pn, a));
+}
+
+static void op_PN_D_get(const void *NOTUSED(data), scene_state_t *ss,
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t a = cs_pop(cs);
+    cs_push(cs, p_d_get(ss, pn, a));
+}
+
+static void op_P_D_set(const void *NOTUSED(data), scene_state_t *ss,
+                       exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = ss->variables.p_n;
+    int16_t a = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    p_d_set(ss, pn, a, b);
+}
+
+static void op_PN_D_set(const void *NOTUSED(data), scene_state_t *ss,
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t a = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    p_d_set(ss, pn, a, b);
+}
+
+static void op_P_D_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    cs_push(cs, ss_get_pattern_dur(ss, pn, ss_get_pattern_idx(ss, pn)));
+}
+
+static void op_PN_D_HERE_get(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    cs_push(cs, ss_get_pattern_dur(ss, pn, ss_get_pattern_idx(ss, pn)));
+}
+
+static void op_P_D_HERE_set(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t a = cs_pop(cs);
+    ss_set_pattern_dur(ss, pn, ss_get_pattern_idx(ss, pn), a);
+    tele_pattern_updated();
+}
+
+static void op_PN_D_HERE_set(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t a = cs_pop(cs);
+    ss_set_pattern_dur(ss, pn, ss_get_pattern_idx(ss, pn), a);
+    tele_pattern_updated();
+}
+
+// Randomise dur[] for every cell in [start..end]. lo/hi are clamped >= 1
+// and swapped if lo > hi, so a freeze-the-sequencer 0 is impossible.
+static void p_d_rnd(scene_state_t *ss, int16_t pn, int16_t lo, int16_t hi) {
+    pn = normalise_pn(pn);
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    if (end < start) return;
+
+    if (lo < 1) lo = 1;
+    if (hi < 1) hi = 1;
+    if (lo > hi) {
+        int16_t t = lo;
+        lo = hi;
+        hi = t;
+    }
+
+    random_state_t *r = &ss->rand_states.s.pattern.rand;
+    int16_t range = hi - lo + 1;
+    for (int16_t i = start; i <= end; i++) {
+        int16_t v = (int16_t)(random_next(r) % range) + lo;
+        ss_set_pattern_dur(ss, pn, i, v);
+    }
+    tele_pattern_updated();
+}
+
+static void op_P_D_RND_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t hi = cs_pop(cs);
+    int16_t lo = cs_pop(cs);
+    p_d_rnd(ss, ss->variables.p_n, lo, hi);
+}
+
+static void op_PN_D_RND_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t hi = cs_pop(cs);
+    int16_t lo = cs_pop(cs);
+    p_d_rnd(ss, pn, lo, hi);
+}
+
+// clang-format off
+const tele_op_t op_P_D        = MAKE_GET_SET_OP(P.D,        op_P_D_get,        op_P_D_set,        1, true);
+const tele_op_t op_PN_D       = MAKE_GET_SET_OP(PN.D,       op_PN_D_get,       op_PN_D_set,       2, true);
+const tele_op_t op_P_D_HERE   = MAKE_GET_SET_OP(P.D.HERE,   op_P_D_HERE_get,   op_P_D_HERE_set,   0, true);
+const tele_op_t op_PN_D_HERE  = MAKE_GET_SET_OP(PN.D.HERE,  op_PN_D_HERE_get,  op_PN_D_HERE_set,  1, true);
+const tele_op_t op_P_D_RND    = MAKE_GET_OP(P.D.RND,        op_P_D_RND_get,    2, false);
+const tele_op_t op_PN_D_RND   = MAKE_GET_OP(PN.D.RND,       op_PN_D_RND_get,   3, false);
+// clang-format on
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // P.A family //////////////////////////////////////////////////////////////////
 //

@@ -446,6 +446,121 @@ TEST test_PN_ACC_family() {
     PASS();
 }
 
+TEST test_P_D() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // defaults: dur[i] = 1 for every cell of every pattern.
+    char* default_at_0[1] = { "P.D 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, default_at_0, 1));
+
+    char* default_at_5[1] = { "P.D 5" };
+    CHECK_CALL(process_helper_state(&ss, 1, default_at_5, 1));
+
+    // write then read back.
+    char* set_read[2] = { "P.D 0 4", "P.D 0" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_read, 4));
+
+    // setter clamps values < 1 up to 1 (a 0-duration cell would freeze
+    // the sequencer).
+    char* set_zero[2] = { "P.D 1 0", "P.D 1" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_zero, 1));
+
+    char* set_neg[2] = { "P.D 2 -5", "P.D 2" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_neg, 1));
+
+    PASS();
+}
+
+TEST test_P_D_HERE() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Walk idx to 3 (P.L 4 + a few P.NEXTs), set dur at HERE, read back.
+    char* prep[4] = { "P.L 8", "P.I 3", "P.D.HERE 7", "P.D 3" };
+    CHECK_CALL(process_helper_state(&ss, 4, prep, 7));
+
+    // P.D.HERE reads the same cell.
+    char* read[1] = { "P.D.HERE" };
+    CHECK_CALL(process_helper_state(&ss, 1, read, 7));
+
+    // HERE setter also clamps.
+    char* clamp[2] = { "P.D.HERE 0", "P.D.HERE" };
+    CHECK_CALL(process_helper_state(&ss, 2, clamp, 1));
+
+    PASS();
+}
+
+TEST test_PN_D_family() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Set p_n to 3 to confirm PN.* does not consult it.
+    char* prep[3] = { "P.N 3", "PN.D 1 0 5", "P.N" };
+    CHECK_CALL(process_helper_state(&ss, 3, prep, 3));  // P.N still 3
+
+    char* read[1] = { "PN.D 1 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, read, 5));
+
+    char* read_p[1] = { "P.D 0" };  // pattern 3, idx 0 — untouched
+    CHECK_CALL(process_helper_state(&ss, 1, read_p, 1));
+
+    // PN.D.HERE writes/reads via the indexed pattern's current idx.
+    char* here[4] = { "PN.L 2 4", "PN.I 2 2", "PN.D.HERE 2 9", "PN.D 2 2" };
+    CHECK_CALL(process_helper_state(&ss, 4, here, 9));
+
+    PASS();
+}
+
+TEST test_P_D_RND() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Constrain randomisation to indices 2..5 on the active pattern.
+    // process_helper_state needs the trailing command to push a known
+    // value, so each sequence reads back something deterministic.
+    char* set_start[2] = { "P.START 2", "P.START" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_start, 2));
+    char* set_end[2] = { "P.END 5", "P.END" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_end, 5));
+
+    // lo == hi makes the fill deterministic. Run RND then read cells.
+    char* rnd_3[2] = { "P.D.RND 3 3", "P.D 2" };
+    CHECK_CALL(process_helper_state(&ss, 2, rnd_3, 3));
+    char* read_hi[1] = { "P.D 5" };
+    CHECK_CALL(process_helper_state(&ss, 1, read_hi, 3));
+
+    // Cells outside [start..end] are untouched (still default 1).
+    char* read_below[1] = { "P.D 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, read_below, 1));
+    char* read_above[1] = { "P.D 6" };
+    CHECK_CALL(process_helper_state(&ss, 1, read_above, 1));
+
+    // lo > hi: args swap internally. lo=10 hi=9 -> range [9, 10]; assert
+    // every written cell falls in that range (RNG-dependent exact value).
+    char* swap_then_dummy[2] = { "P.D.RND 10 9", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, swap_then_dummy, 0));
+    for (int i = 2; i <= 5; i++) {
+        int16_t v = ss_get_pattern_dur(&ss, 0, i);
+        ASSERT(v == 9 || v == 10);
+    }
+
+    // lo < 1 clamps to 1: P.D.RND 0 0 -> fill with 1.
+    char* clamp[2] = { "P.D.RND 0 0", "P.D 4" };
+    CHECK_CALL(process_helper_state(&ss, 2, clamp, 1));
+
+    // Range randomisation on a different pattern. Pattern 1 keeps its
+    // default start=0 end=63 so every cell should be touched and fall
+    // in [2, 6].
+    char* mass_rnd[2] = { "PN.D.RND 1 2 6", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, mass_rnd, 0));
+    for (int i = 0; i < PATTERN_LENGTH; i++) {
+        int16_t v = ss_get_pattern_dur(&ss, 1, i);
+        ASSERT(v >= 2 && v <= 6);
+    }
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -465,4 +580,8 @@ SUITE(process_suite) {
     RUN_TEST(test_P_ACC);
     RUN_TEST(test_P_ACC_W);
     RUN_TEST(test_PN_ACC_family);
+    RUN_TEST(test_P_D);
+    RUN_TEST(test_P_D_HERE);
+    RUN_TEST(test_PN_D_family);
+    RUN_TEST(test_P_D_RND);
 }

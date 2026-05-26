@@ -124,6 +124,12 @@
         "PN.ROT"      => { MATCH_OP(E_OP_PN_ROT); };
         "P.RND"       => { MATCH_OP(E_OP_P_RND); };
         "PN.RND"      => { MATCH_OP(E_OP_PN_RND); };
+        "P.D"         => { MATCH_OP(E_OP_P_D); };
+        "PN.D"        => { MATCH_OP(E_OP_PN_D); };
+        "P.D.HERE"    => { MATCH_OP(E_OP_P_D_HERE); };
+        "PN.D.HERE"   => { MATCH_OP(E_OP_PN_D_HERE); };
+        "P.D.RND"     => { MATCH_OP(E_OP_P_D_RND); };
+        "PN.D.RND"    => { MATCH_OP(E_OP_PN_D_RND); };
         "P.+"         => { MATCH_OP(E_OP_P_ADD); };
         "PN.+"        => { MATCH_OP(E_OP_PN_ADD); };
         "P.-"         => { MATCH_OP(E_OP_P_SUB); };

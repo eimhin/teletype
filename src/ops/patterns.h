@@ -62,4 +62,11 @@ extern const tele_op_t op_P_ACC_W;
 extern const tele_op_t op_PN_ACC_W;
 extern const tele_op_t op_ACC_CLR;
 
+extern const tele_op_t op_P_D;
+extern const tele_op_t op_PN_D;
+extern const tele_op_t op_P_D_HERE;
+extern const tele_op_t op_PN_D_HERE;
+extern const tele_op_t op_P_D_RND;
+extern const tele_op_t op_PN_D_RND;
+
 #endif
