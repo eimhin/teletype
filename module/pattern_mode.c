@@ -41,8 +41,30 @@ static bool editing_number;
 static int32_t edit_buffer;
 static bool edit_negative;
 
+// PATTERN mode has two views over each cell: val (default) and dur. The
+// duration view is toggled by `~` (HID_TILDE) inside process_pattern_keys.
+// pm_get_cell / pm_set_cell dispatch every cell access through the view
+// so the existing renderer and key handlers all operate on the active
+// array without per-call conditionals.
+//   pattern_view 0 -> val[] (notes / arbitrary values)
+//   pattern_view 1 -> dur[] (per-cell dwell ticks used by P.STEP)
+static uint8_t pattern_view = 0;
+
 static inline uint8_t abs_pattern(void) {
     return pattern_page * PATTERNS_PER_PAGE + pattern;
+}
+
+static inline int16_t pm_get_cell(scene_state_t *ss, size_t pn, size_t idx) {
+    return pattern_view ? ss_get_pattern_dur(ss, pn, idx)
+                        : ss_get_pattern_val(ss, pn, idx);
+}
+
+static inline void pm_set_cell(scene_state_t *ss, size_t pn, size_t idx,
+                               int16_t v) {
+    if (pattern_view)
+        ss_set_pattern_dur(ss, pn, idx, v);  // clamps < 1 to 1
+    else
+        ss_set_pattern_val(ss, pn, idx, v);
 }
 
 // teletype_io.h
@@ -134,9 +156,9 @@ void note_nudge(int8_t semitones) {
     }
     else {
         int16_t pattern_val =
-            ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+            pm_get_cell(&scene_state, abs_pattern(), base + offset);
         int16_t new_val = transpose_n_value(pattern_val, semitones);
-        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, new_val);
+        pm_set_cell(&scene_state, abs_pattern(), base + offset, new_val);
     }
     dirty = true;
 }
@@ -236,13 +258,12 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             dirty = true;
         }
         else {
-            int16_t v =
-                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), base + offset);
             if (v == INT16_MIN)
-                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                                   INT16_MAX);
+                pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                            INT16_MAX);
             else
-                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, v - 1);
+                pm_set_cell(&scene_state, abs_pattern(), base + offset, v - 1);
             dirty = true;
         }
     }
@@ -256,13 +277,12 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             dirty = true;
         }
         else {
-            int16_t v =
-                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), base + offset);
             if (v == INT16_MAX)
-                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                                   INT16_MIN);
+                pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                            INT16_MIN);
             else
-                ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, v + 1);
+                pm_set_cell(&scene_state, abs_pattern(), base + offset, v + 1);
             dirty = true;
         }
     }
@@ -299,7 +319,7 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
         else {
             editing_number = true;
             edit_buffer =
-                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset) / 10;
+                pm_get_cell(&scene_state, abs_pattern(), base + offset) / 10;
         }
         dirty = true;
     }
@@ -307,8 +327,8 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift(m, k, HID_BACKSPACE)) {
         editing_number = false;
         for (size_t i = base + offset; i < 63; i++) {
-            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i + 1);
-            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), i + 1);
+            pm_set_cell(&scene_state, abs_pattern(), i, v);
         }
 
         uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
@@ -319,8 +339,8 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_no_mod(m, k, HID_ENTER)) {
         // commit an edit if active
         if (editing_number) {
-            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                               edit_buffer);
+            pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                        edit_buffer);
             editing_number = false;
             edit_negative = false;
         }
@@ -334,14 +354,14 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_shift(m, k, HID_ENTER)) {
         // commit an edit before duplication
         if (editing_number) {
-            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                               edit_buffer);
+            pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                        edit_buffer);
             editing_number = false;
             edit_negative = false;
         }
         for (int i = 63; i > base + offset; i--) {
-            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i - 1);
-            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), i - 1);
+            pm_set_cell(&scene_state, abs_pattern(), i, v);
         }
         uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (base + offset == l && l < 64) {
@@ -353,10 +373,10 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_alt(m, k, HID_X)) {
         editing_number = false;
         value_copy_buffer =
-            ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+            pm_get_cell(&scene_state, abs_pattern(), base + offset);
         for (int i = base + offset; i < 63; i++) {
-            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i + 1);
-            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), i + 1);
+            pm_set_cell(&scene_state, abs_pattern(), i, v);
         }
 
         uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
@@ -371,28 +391,28 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             value_copy_buffer = edit_buffer;
         else
             value_copy_buffer =
-                ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+                pm_get_cell(&scene_state, abs_pattern(), base + offset);
     }
     // alt-v: paste value (n.b. ctrl-v not supported)
     else if (match_alt(m, k, HID_V)) {
         editing_number = false;
-        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                           value_copy_buffer);
+        pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                    value_copy_buffer);
         dirty = true;
     }
     // shift-alt-v: insert value
     else if (match_shift_alt(m, k, HID_V)) {
         editing_number = false;
         for (int i = 63; i > base + offset; i--) {
-            int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), i - 1);
-            ss_set_pattern_val(&scene_state, abs_pattern(), i, v);
+            int16_t v = pm_get_cell(&scene_state, abs_pattern(), i - 1);
+            pm_set_cell(&scene_state, abs_pattern(), i, v);
         }
         uint16_t l = ss_get_pattern_len(&scene_state, abs_pattern());
         if (l >= base + offset && l < 63) {
             ss_set_pattern_len(&scene_state, abs_pattern(), l + 1);
         }
-        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset,
-                           value_copy_buffer);
+        pm_set_cell(&scene_state, abs_pattern(), base + offset,
+                    value_copy_buffer);
         dirty = true;
     }
     // shift-l: set length to current position
@@ -472,7 +492,7 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
     }
     // -: negate value
     else if (match_no_mod(m, k, HID_UNDERSCORE)) {
-        int16_t v = ss_get_pattern_val(&scene_state, abs_pattern(), base + offset);
+        int16_t v = pm_get_cell(&scene_state, abs_pattern(), base + offset);
         if (v == 0 && !editing_number) {
             editing_number = true;
             edit_buffer = 0;
@@ -483,21 +503,32 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
             else
                 edit_buffer *= -1;
         }
-        else { ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, -v); }
+        else { pm_set_cell(&scene_state, abs_pattern(), base + offset, -v); }
         dirty = true;
     }
     // <space>: toggle non-zero to zero, and zero to 1
     else if (match_no_mod(m, k, HID_SPACEBAR)) {
         editing_number = false;
-        if (ss_get_pattern_val(&scene_state, abs_pattern(), base + offset))
-            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, 0);
+        if (pm_get_cell(&scene_state, abs_pattern(), base + offset))
+            pm_set_cell(&scene_state, abs_pattern(), base + offset, 0);
         else
-            ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, 1);
+            pm_set_cell(&scene_state, abs_pattern(), base + offset, 1);
         dirty = true;
     }
     else if (match_shift(m, k, HID_2)) {
         turtle_set_shown(&scene_state.turtle,
                          !turtle_get_shown(&scene_state.turtle));
+        dirty = true;
+    }
+    // ~: toggle between value view (val[]) and duration view (dur[]).
+    // Mirrors LIVE mode's tilde idiom (live_mode.c) where ~ toggles a
+    // sub-view. Cells visibly flip on toggle since fresh-scene defaults
+    // are 0 (val) and 1 (dur), so no header indicator is needed.
+    else if (match_no_mod(m, k, HID_TILDE)) {
+        pattern_view = pattern_view ? 0 : 1;
+        editing_number = false;
+        edit_negative = false;
+        edit_buffer = 0;
         dirty = true;
     }
     // 0-9: numeric entry
@@ -531,11 +562,11 @@ void process_pattern_keys(uint8_t k, uint8_t m, bool is_held_key) {
 
 void process_pattern_knob(uint16_t knob, uint8_t m) {
     if (mod_only_ctrl_alt(m)) {
-        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, knob >> 7);
+        pm_set_cell(&scene_state, abs_pattern(), base + offset, knob >> 7);
         dirty = true;
     }
     else if (mod_only_shift_ctrl(m)) {
-        ss_set_pattern_val(&scene_state, abs_pattern(), base + offset, knob >> 2);
+        pm_set_cell(&scene_state, abs_pattern(), base + offset, knob >> 2);
         dirty = true;
     }
 }
@@ -554,7 +585,7 @@ uint8_t screen_refresh_pattern() {
             uint8_t a = 1;
             if (ss_get_pattern_len(&scene_state, p) > y + offset) a = 6;
 
-            itoa(ss_get_pattern_val(&scene_state, p, y + offset), s, 10);
+            itoa(pm_get_cell(&scene_state, p, y + offset), s, 10);
             font_string_region_clip_right(&line[y], s, (x + 1) * 30 + 4, 0, a,
                                           0);
 
@@ -587,7 +618,7 @@ uint8_t screen_refresh_pattern() {
         }
     }
     else {
-        itoa(ss_get_pattern_val(&scene_state, abs_pattern(), base + offset), s, 10);
+        itoa(pm_get_cell(&scene_state, abs_pattern(), base + offset), s, 10);
         font_string_region_clip_right(&line[base], s, (pattern + 1) * 30 + 4, 0,
                                       0xf, 0);
     }
