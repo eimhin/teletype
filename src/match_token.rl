@@ -136,6 +136,12 @@
         "PN.STEP.NEW" => { MATCH_OP(E_OP_PN_STEP_NEW); };
         "P.STEP?"     => { MATCH_OP(E_OP_P_STEPQ); };
         "PN.STEP?"    => { MATCH_OP(E_OP_PN_STEPQ); };
+        "P.MODE"      => { MATCH_OP(E_OP_P_MODE); };
+        "PN.MODE"     => { MATCH_OP(E_OP_PN_MODE); };
+        "P.DIR"       => { MATCH_OP(E_OP_P_DIR); };
+        "PN.DIR"      => { MATCH_OP(E_OP_PN_DIR); };
+        "P.STRIDE"    => { MATCH_OP(E_OP_P_STRIDE); };
+        "PN.STRIDE"   => { MATCH_OP(E_OP_PN_STRIDE); };
         "P.+"         => { MATCH_OP(E_OP_P_ADD); };
         "PN.+"        => { MATCH_OP(E_OP_PN_ADD); };
         "P.-"         => { MATCH_OP(E_OP_P_SUB); };

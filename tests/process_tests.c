@@ -719,6 +719,172 @@ TEST test_P_STEPQ() {
     PASS();
 }
 
+// Drive the per-pattern mode through several P.STEP calls. dur=1 so each
+// P.STEP advances; we only assert idx by reading val[].
+TEST test_P_MODE_pingpong() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // 4-cell pattern val 10,20,30,40; range = full [0..3]; PINGPONG.
+    char* setup[11] = { "P.L 4", "P.WRAP 1", "P.START 0", "P.END 3",
+                        "P 0 10", "P 1 20", "P 2 30", "P 3 40",
+                        "P.I 0", "P.MODE 1", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 11, setup, 1));
+
+    char* step[1] = { "P.STEP" };
+    // tick 1: enter idx 0 (NEW=1, no advance) -> 10.
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+    // PINGPONG forward: 10 20 30 40 (hold) 40 30 20 10 (hold) 10 ...
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));  // repeat endpoint
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));  // repeat endpoint
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+
+    PASS();
+}
+
+TEST test_P_MODE_pendulum() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    char* setup[11] = { "P.L 4", "P.WRAP 1", "P.START 0", "P.END 3",
+                        "P 0 10", "P 1 20", "P 2 30", "P 3 40",
+                        "P.I 0", "P.MODE 2", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 11, setup, 2));
+
+    char* step[1] = { "P.STEP" };
+    // PENDULUM forward: 10 20 30 40 30 20 10 20 30 40 ...
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));  // enter
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));  // play once
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));  // reverse, skip 40
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));  // play once
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));  // reverse, skip 10
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+
+    PASS();
+}
+
+// PENDULUM degenerate case: range=2 should toggle (endpoints play once,
+// no repeats) — i.e. 0,1,0,1 not 0,1,1,0,0.
+TEST test_P_MODE_pendulum_range_2() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    char* setup[9] = { "P.L 2", "P.WRAP 1", "P.START 0", "P.END 1",
+                       "P 0 10", "P 1 20", "P.I 0", "P.MODE 2", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 9, setup, 2));
+
+    char* step[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));  // enter
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+
+    PASS();
+}
+
+TEST test_P_MODE_linear_rev() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    char* setup[12] = { "P.L 4", "P.WRAP 1", "P.START 0", "P.END 3",
+                        "P 0 10", "P 1 20", "P 2 30", "P 3 40",
+                        "P.DIR 1", "P.I 3", "P.MODE 0", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 12, setup, 0));
+
+    char* step[1] = { "P.STEP" };
+    // LINEAR REV starting at idx 3 — should walk 40 30 20 10 then wrap.
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));  // enter
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));  // wrap
+
+    PASS();
+}
+
+TEST test_P_MODE_jump() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    char* setup[12] = { "P.L 6", "P.WRAP 1", "P.START 0", "P.END 5",
+                        "P 0 1", "P 1 2", "P 2 3", "P 3 4",
+                        "P.I 0", "P.MODE 3", "P.STRIDE 2", "P.STRIDE" };
+    CHECK_CALL(process_helper_state(&ss, 12, setup, 2));
+    char* p4[3] = { "P 4 5", "P 5 6", "P 5" };
+    CHECK_CALL(process_helper_state(&ss, 3, p4, 6));
+
+    char* step[1] = { "P.STEP" };
+    // stride 2 across [0..5]: idx 0 -> 2 -> 4 -> 0 -> 2 ...
+    CHECK_CALL(process_helper_state(&ss, 1, step, 1));  // enter idx 0
+    CHECK_CALL(process_helper_state(&ss, 1, step, 3));  // idx 2
+    CHECK_CALL(process_helper_state(&ss, 1, step, 5));  // idx 4
+    CHECK_CALL(process_helper_state(&ss, 1, step, 1));  // wrap -> idx 0
+    CHECK_CALL(process_helper_state(&ss, 1, step, 3));
+
+    PASS();
+}
+
+TEST test_P_MODE_random_in_range() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // RANDOM should always land in [start..end]. We don't assert
+    // distribution — set val[2..5] = 1 and val outside to 0, then step
+    // many times and assert every P.STEP returns 1 (i.e. idx in range).
+    char* setup[11] = { "P.L 8", "P.WRAP 1", "P.START 2", "P.END 5",
+                        "P 2 1", "P 3 1", "P 4 1", "P 5 1",
+                        "P.I 2", "P.MODE 4", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 11, setup, 4));
+
+    char* step[1] = { "P.STEP" };
+    // First step is the "enter" tick — stays on idx 2, returns val 1.
+    CHECK_CALL(process_helper_state(&ss, 1, step, 1));
+    for (int i = 0; i < 32; i++) {
+        // Every subsequent step lands somewhere in [2..5] -> val=1.
+        CHECK_CALL(process_helper_state(&ss, 1, step, 1));
+    }
+
+    PASS();
+}
+
+TEST test_P_MODE_roundtrip_via_p_i() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // After stepping into a pendulum bounce, P.I should re-seed the
+    // travel direction so the next P.STEP moves forward again.
+    char* setup[11] = { "P.L 4", "P.WRAP 1", "P.START 0", "P.END 3",
+                        "P 0 10", "P 1 20", "P 2 30", "P 3 40",
+                        "P.I 0", "P.MODE 2", "P.MODE" };
+    CHECK_CALL(process_helper_state(&ss, 11, setup, 2));
+
+    char* step[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 40));
+    CHECK_CALL(process_helper_state(&ss, 1, step, 30));  // reversed
+
+    // Reset to idx 0; travel_dir should re-seed to +1 (base dir FWD).
+    char* reset[2] = { "P.I 0", "P.I" };
+    CHECK_CALL(process_helper_state(&ss, 2, reset, 0));
+
+    CHECK_CALL(process_helper_state(&ss, 1, step, 10));  // enter
+    CHECK_CALL(process_helper_state(&ss, 1, step, 20));  // forward, not back
+
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -747,4 +913,11 @@ SUITE(process_suite) {
     RUN_TEST(test_P_I_resets_dwell);
     RUN_TEST(test_PN_STEP_independence);
     RUN_TEST(test_P_STEPQ);
+    RUN_TEST(test_P_MODE_pingpong);
+    RUN_TEST(test_P_MODE_pendulum);
+    RUN_TEST(test_P_MODE_pendulum_range_2);
+    RUN_TEST(test_P_MODE_linear_rev);
+    RUN_TEST(test_P_MODE_jump);
+    RUN_TEST(test_P_MODE_random_in_range);
+    RUN_TEST(test_P_MODE_roundtrip_via_p_i);
 }

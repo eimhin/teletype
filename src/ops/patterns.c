@@ -321,6 +321,10 @@ static void p_i_set(scene_state_t *ss, int16_t pn, int16_t i) {
     // and mid-run resets from a reset jack alike.
     ss->p_dwell[pn] = 0;
     ss->p_just_advanced[pn] = 0;
+    // Re-seed mode-internal travel direction from the persisted base dir so
+    // the next P.STEP starts cleanly (e.g. a pendulum bounce in progress
+    // doesn't carry over after a reset).
+    ss->p_travel_dir[pn] = ss_get_pattern_dir(ss, pn) ? -1 : 1;
     tele_pattern_updated();
 }
 
@@ -1176,11 +1180,262 @@ const tele_op_t op_PN_D_RND   = MAKE_GET_OP(PN.D.RND,       op_PN_D_RND_get,   3
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// P.MODE, PN.MODE, P.DIR, PN.DIR, P.STRIDE, PN.STRIDE /////////////////////////
+// Per-pattern playback-mode configuration consumed by p_mode_advance.
+// These ops are pure config — they never advance the playhead.
+
+static void op_P_MODE_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    cs_push(cs, ss_get_pattern_mode(ss, pn));
+}
+
+static void op_PN_MODE_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    cs_push(cs, ss_get_pattern_mode(ss, pn));
+}
+
+static void op_P_MODE_set(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t a = cs_pop(cs);
+    if (a < 0) a = 0;
+    if (a >= PATTERN_MODE_COUNT) a = PATTERN_MODE_COUNT - 1;
+    ss_set_pattern_mode(ss, pn, (uint8_t)a);
+    tele_pattern_updated();
+}
+
+static void op_PN_MODE_set(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t a = cs_pop(cs);
+    if (a < 0) a = 0;
+    if (a >= PATTERN_MODE_COUNT) a = PATTERN_MODE_COUNT - 1;
+    ss_set_pattern_mode(ss, pn, (uint8_t)a);
+    tele_pattern_updated();
+}
+
+static void op_P_DIR_get(const void *NOTUSED(data), scene_state_t *ss,
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    cs_push(cs, ss_get_pattern_dir(ss, pn));
+}
+
+static void op_PN_DIR_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    cs_push(cs, ss_get_pattern_dir(ss, pn));
+}
+
+static void op_P_DIR_set(const void *NOTUSED(data), scene_state_t *ss,
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t a = cs_pop(cs);
+    ss_set_pattern_dir(ss, pn, a ? 1 : 0);
+    // Re-seed travel direction so a mid-bounce flip starts the next
+    // P.STEP travelling in the new base direction.
+    ss->p_travel_dir[pn] = a ? -1 : 1;
+    tele_pattern_updated();
+}
+
+static void op_PN_DIR_set(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t a = cs_pop(cs);
+    ss_set_pattern_dir(ss, pn, a ? 1 : 0);
+    ss->p_travel_dir[pn] = a ? -1 : 1;
+    tele_pattern_updated();
+}
+
+static void op_P_STRIDE_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    cs_push(cs, ss_get_pattern_stride(ss, pn));
+}
+
+static void op_PN_STRIDE_get(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    cs_push(cs, ss_get_pattern_stride(ss, pn));
+}
+
+static void op_P_STRIDE_set(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t a = cs_pop(cs);
+    if (a < 1) a = 1;
+    if (a > INT8_MAX) a = INT8_MAX;
+    ss_set_pattern_stride(ss, pn, (int8_t)a);
+    tele_pattern_updated();
+}
+
+static void op_PN_STRIDE_set(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t a = cs_pop(cs);
+    if (a < 1) a = 1;
+    if (a > INT8_MAX) a = INT8_MAX;
+    ss_set_pattern_stride(ss, pn, (int8_t)a);
+    tele_pattern_updated();
+}
+
+// clang-format off
+const tele_op_t op_P_MODE     = MAKE_GET_SET_OP(P.MODE,     op_P_MODE_get,     op_P_MODE_set,     0, true);
+const tele_op_t op_PN_MODE    = MAKE_GET_SET_OP(PN.MODE,    op_PN_MODE_get,    op_PN_MODE_set,    1, true);
+const tele_op_t op_P_DIR      = MAKE_GET_SET_OP(P.DIR,      op_P_DIR_get,      op_P_DIR_set,      0, true);
+const tele_op_t op_PN_DIR     = MAKE_GET_SET_OP(PN.DIR,     op_PN_DIR_get,     op_PN_DIR_set,     1, true);
+const tele_op_t op_P_STRIDE   = MAKE_GET_SET_OP(P.STRIDE,   op_P_STRIDE_get,   op_P_STRIDE_set,   0, true);
+const tele_op_t op_PN_STRIDE  = MAKE_GET_SET_OP(PN.STRIDE,  op_PN_STRIDE_get,  op_PN_STRIDE_set,  1, true);
+// clang-format on
+
+
+////////////////////////////////////////////////////////////////////////////////
+// p_mode_advance //////////////////////////////////////////////////////////////
+// Dispatches the next-cell choice for P.STEP based on the per-pattern mode
+// (LINEAR / PINGPONG / PENDULUM / JUMP / RANDOM / BROWNIAN) and base
+// direction. PINGPONG/PENDULUM/BROWNIAN consult and update
+// ss->p_travel_dir[pn]; RANDOM/BROWNIAN draw from the shared pattern RNG.
+
+static void p_mode_advance(scene_state_t *ss, int16_t pn) {
+    pn = normalise_pn(pn);
+
+    const uint8_t mode = ss_get_pattern_mode(ss, pn);
+    const uint8_t base_dir = ss_get_pattern_dir(ss, pn);
+    const int16_t start = ss_get_pattern_start(ss, pn);
+    const int16_t end_raw = ss_get_pattern_end(ss, pn);
+    const int16_t len = ss_get_pattern_len(ss, pn);
+
+    // Clamp end into [start..len-1] so all modes share one safe range.
+    int16_t end = end_raw;
+    if (len > 0 && end >= len) end = len - 1;
+    if (end < start) {
+        // Degenerate range: leave idx where it is.
+        return;
+    }
+    const int16_t range = end - start + 1;
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    if (idx < start || idx > end) idx = start;
+
+    switch (mode) {
+        case PATTERN_MODE_LINEAR: {
+            if (base_dir)
+                p_prev_dec_i(ss, pn);
+            else
+                p_next_inc_i(ss, pn);
+            return;
+        }
+
+        case PATTERN_MODE_PINGPONG: {
+            // Endpoints repeat: on reaching an end, stay one tick and
+            // reverse travel direction.
+            int16_t dir = ss->p_travel_dir[pn];
+            if (dir != 1 && dir != -1) dir = base_dir ? -1 : 1;
+            if (range == 1) {
+                idx = start;
+                ss->p_travel_dir[pn] = dir;
+                ss_set_pattern_idx(ss, pn, idx);
+                return;
+            }
+            if (dir > 0 && idx >= end) {
+                dir = -1;  // hold idx == end, reverse
+            }
+            else if (dir < 0 && idx <= start) {
+                dir = 1;  // hold idx == start, reverse
+            }
+            else {
+                idx += dir;
+            }
+            ss->p_travel_dir[pn] = dir;
+            ss_set_pattern_idx(ss, pn, idx);
+            return;
+        }
+
+        case PATTERN_MODE_PENDULUM: {
+            // Endpoints play once: on reaching an end, flip and step in
+            // the new direction immediately. range==1 has nowhere to go.
+            int16_t dir = ss->p_travel_dir[pn];
+            if (dir != 1 && dir != -1) dir = base_dir ? -1 : 1;
+            if (range == 1) {
+                idx = start;
+                ss->p_travel_dir[pn] = dir;
+                ss_set_pattern_idx(ss, pn, idx);
+                return;
+            }
+            if (dir > 0 && idx >= end) {
+                dir = -1;
+                idx = end - 1;
+            }
+            else if (dir < 0 && idx <= start) {
+                dir = 1;
+                idx = start + 1;
+            }
+            else {
+                idx += dir;
+            }
+            ss->p_travel_dir[pn] = dir;
+            ss_set_pattern_idx(ss, pn, idx);
+            return;
+        }
+
+        case PATTERN_MODE_JUMP: {
+            int8_t stride = ss_get_pattern_stride(ss, pn);
+            if (stride < 1) stride = 1;
+            int16_t step = base_dir ? -(int16_t)stride : (int16_t)stride;
+            // Modular add within [start..end].
+            int16_t offset = (int16_t)(idx - start + step);
+            offset %= range;
+            if (offset < 0) offset += range;
+            idx = (int16_t)(start + offset);
+            ss_set_pattern_idx(ss, pn, idx);
+            return;
+        }
+
+        case PATTERN_MODE_RANDOM: {
+            random_state_t *r = &ss->rand_states.s.pattern.rand;
+            idx = (int16_t)(random_next(r) % (uint32_t)range) + start;
+            ss_set_pattern_idx(ss, pn, idx);
+            return;
+        }
+
+        case PATTERN_MODE_BROWNIAN: {
+            // Drunken walk: 50% +dir, 25% stay, 25% -dir. Clamps at the
+            // endpoints rather than wrapping — a step off either end is
+            // suppressed so the walk has a natural restoring force at
+            // [start, end] (matches Metropolix-style brownian).
+            int16_t dir = ss->p_travel_dir[pn];
+            if (dir != 1 && dir != -1) dir = base_dir ? -1 : 1;
+            random_state_t *r = &ss->rand_states.s.pattern.rand;
+            uint32_t roll = random_next(r) & 0x3;
+            int16_t step;
+            if (roll == 0)
+                step = 0;
+            else if (roll == 1)
+                step = -dir;
+            else
+                step = dir;  // rolls 2 and 3 both move +dir (50%)
+            int16_t next = idx + step;
+            if (next < start) next = start;
+            if (next > end) next = end;
+            ss->p_travel_dir[pn] = dir;
+            ss_set_pattern_idx(ss, pn, next);
+            return;
+        }
+
+        default:
+            // Unknown mode — fall back to LINEAR FWD.
+            p_next_inc_i(ss, pn);
+            return;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // P.STEP, PN.STEP, P.STEP.NEW, PN.STEP.NEW ////////////////////////////////////
 // Duration-aware playhead advance. P.STEP bumps an internal dwell counter
-// and only advances idx (via the existing p_next_inc_i helper) when dwell
-// reaches the current cell's dur[]. P.STEP.NEW returns 1 on the tick a
-// stage just began — including the first STEP after init or a P.I reset.
+// and only advances idx (via p_mode_advance) when dwell reaches the
+// current cell's dur[]. P.STEP.NEW returns 1 on the tick a stage just
+// began — including the first STEP after init or a P.I reset.
 
 // Advance Saga by one tick. Returns the val[] at the current idx after
 // the step. Sets p_just_advanced[pn] = 1 iff idx just moved (or this is
@@ -1196,7 +1451,7 @@ static int16_t p_step(scene_state_t *ss, int16_t pn) {
     }
     else if (ss->p_dwell[pn] + 1 > dur) {
         // current stage is over — advance to the next cell.
-        p_next_inc_i(ss, pn);
+        p_mode_advance(ss, pn);
         ss->p_dwell[pn] = 1;
         ss->p_just_advanced[pn] = 1;
     }

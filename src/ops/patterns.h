@@ -76,4 +76,11 @@ extern const tele_op_t op_PN_STEP_NEW;
 extern const tele_op_t op_P_STEPQ;
 extern const tele_op_t op_PN_STEPQ;
 
+extern const tele_op_t op_P_MODE;
+extern const tele_op_t op_PN_MODE;
+extern const tele_op_t op_P_DIR;
+extern const tele_op_t op_PN_DIR;
+extern const tele_op_t op_P_STRIDE;
+extern const tele_op_t op_PN_STRIDE;
+
 #endif

@@ -298,6 +298,45 @@ TEST test_deserialize_without_pd_leaves_default_durs() {
     PASS();
 }
 
+// Per-pattern playback mode/dir/stride are intentionally runtime-only —
+// they must NOT round-trip through serialize/deserialize. Scenes set
+// these via INIT or other scripts.
+TEST test_pattern_advance_not_persisted() {
+    scene_state_t scene_a, scene_b;
+    ss_init(&scene_a);
+    ss_init(&scene_b);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    // Set non-default mode/dir/stride on scene A.
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        ss_set_pattern_mode(&scene_a, p, 2);   // PENDULUM
+        ss_set_pattern_dir(&scene_a, p, 1);    // REV
+        ss_set_pattern_stride(&scene_a, p, 5);
+    }
+
+    char buffer[32768];
+    memset(buffer, 0, sizeof(buffer));
+    stringsource out_ss = { .buffer = buffer, .length = 0, .position = 0 };
+    test_string_writer.data = (void*)&out_ss;
+    serialize_scene(&test_string_writer, &scene_a, &text);
+
+    stringsource in_ss = { .buffer = buffer,
+                           .length = out_ss.length,
+                           .position = 0 };
+    test_string_reader.data = (void*)&in_ss;
+    deserialize_scene(&test_string_reader, &scene_b, &text);
+
+    // scene_b should still be at runtime defaults — values did not survive.
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        ASSERT_EQ(0, ss_get_pattern_mode(&scene_b, p));
+        ASSERT_EQ(0, ss_get_pattern_dir(&scene_b, p));
+        ASSERT_EQ(1, ss_get_pattern_stride(&scene_b, p));
+    }
+    PASS();
+}
+
 TEST test_deserialize_fragment_script_basic() {
     scene_state_t scene;
     ss_init(&scene);
@@ -349,6 +388,7 @@ SUITE(serialize_scene_suite) {
     RUN_TEST(test_deserialize_legacy_4pattern_scene);
     RUN_TEST(test_round_trip_pattern_durations);
     RUN_TEST(test_deserialize_without_pd_leaves_default_durs);
+    RUN_TEST(test_pattern_advance_not_persisted);
     RUN_TEST(test_deserialize_fragment_script_basic);
     log_print();
 }

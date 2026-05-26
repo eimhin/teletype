@@ -119,6 +119,19 @@ typedef struct {
 } scene_variables_t;
 // clang-format on
 
+// Per-pattern playback mode used by the P.STEP family. Phase 1 modes,
+// inspired by the Intellijel Metropolix. WRAP is consulted only in
+// LINEAR; the other modes wrap or bounce implicitly.
+typedef enum {
+    PATTERN_MODE_LINEAR = 0,
+    PATTERN_MODE_PINGPONG = 1,
+    PATTERN_MODE_PENDULUM = 2,
+    PATTERN_MODE_JUMP = 3,
+    PATTERN_MODE_RANDOM = 4,
+    PATTERN_MODE_BROWNIAN = 5,
+    PATTERN_MODE_COUNT
+} pattern_mode_t;
+
 typedef struct {
     int16_t idx;
     uint16_t len;
@@ -285,6 +298,15 @@ typedef struct {
     // only on the tick the idx moved (read via P.STEP.NEW).
     uint16_t p_dwell[PATTERN_COUNT];
     uint8_t p_just_advanced[PATTERN_COUNT];
+    // Per-pattern playback mode (P.MODE/P.DIR/P.STRIDE) consumed by
+    // p_mode_advance. Runtime only — intentionally not persisted with
+    // the scene, so scenes set these via INIT / regular scripts.
+    uint8_t p_mode[PATTERN_COUNT];
+    uint8_t p_dir[PATTERN_COUNT];
+    int8_t p_stride[PATTERN_COUNT];
+    // Current travel direction for PINGPONG/PENDULUM/BROWNIAN modes
+    // (+1 or -1). Seeded from p_dir on init / P.I write.
+    int8_t p_travel_dir[PATTERN_COUNT];
 } scene_state_t;
 
 extern void ss_init(scene_state_t *ss);
@@ -326,6 +348,14 @@ extern int16_t ss_get_pattern_dur(scene_state_t *ss, size_t pattern,
                                   size_t idx);
 extern void ss_set_pattern_dur(scene_state_t *ss, size_t pattern, size_t idx,
                                int16_t dur);
+extern uint8_t ss_get_pattern_mode(scene_state_t *ss, size_t pattern);
+extern void ss_set_pattern_mode(scene_state_t *ss, size_t pattern,
+                                uint8_t mode);
+extern uint8_t ss_get_pattern_dir(scene_state_t *ss, size_t pattern);
+extern void ss_set_pattern_dir(scene_state_t *ss, size_t pattern, uint8_t dir);
+extern int8_t ss_get_pattern_stride(scene_state_t *ss, size_t pattern);
+extern void ss_set_pattern_stride(scene_state_t *ss, size_t pattern,
+                                  int8_t stride);
 extern scene_pattern_t *ss_patterns_ptr(scene_state_t *ss);
 extern size_t ss_patterns_size(void);
 

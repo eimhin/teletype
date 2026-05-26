@@ -74,7 +74,8 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_P_ADDW, &op_PN_ADDW, &op_P_SUBW, &op_PN_SUBW, &op_P_ACC, &op_PN_ACC,
     &op_P_ACC_W, &op_PN_ACC_W, &op_ACC_CLR, &op_P_D, &op_PN_D, &op_P_D_HERE,
     &op_PN_D_HERE, &op_P_D_RND, &op_PN_D_RND, &op_P_STEP, &op_PN_STEP,
-    &op_P_STEP_NEW, &op_PN_STEP_NEW, &op_P_STEPQ, &op_PN_STEPQ,
+    &op_P_STEP_NEW, &op_PN_STEP_NEW, &op_P_STEPQ, &op_PN_STEPQ, &op_P_MODE,
+    &op_PN_MODE, &op_P_DIR, &op_PN_DIR, &op_P_STRIDE, &op_PN_STRIDE,
 
     // queue
     &op_Q, &op_Q_AVG, &op_Q_N, &op_Q_CLR, &op_Q_GRW, &op_Q_SUM, &op_Q_MIN,

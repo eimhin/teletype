@@ -453,6 +453,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             continue;
         }
 
+
         if (s == STATE_GRID) {
             if (grid_state == 0) {
                 if (c >= '0' && c <= '9') {

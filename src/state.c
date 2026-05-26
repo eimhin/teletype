@@ -109,6 +109,11 @@ void ss_pattern_init(scene_state_t *ss, size_t pattern_no) {
         p->val[i] = 0;
         p->dur[i] = 1;
     }
+    // Runtime playback-mode state (not part of the persisted scene).
+    ss->p_mode[pattern_no] = PATTERN_MODE_LINEAR;
+    ss->p_dir[pattern_no] = 0;
+    ss->p_stride[pattern_no] = 1;
+    ss->p_travel_dir[pattern_no] = 1;
 }
 
 // grid
@@ -306,6 +311,32 @@ void ss_set_pattern_dur(scene_state_t *ss, size_t pattern, size_t idx,
                         int16_t dur) {
     if (dur < 1) dur = 1;
     ss->patterns[pattern].dur[idx] = dur;
+}
+
+uint8_t ss_get_pattern_mode(scene_state_t *ss, size_t pattern) {
+    return ss->p_mode[pattern];
+}
+
+void ss_set_pattern_mode(scene_state_t *ss, size_t pattern, uint8_t mode) {
+    if (mode >= PATTERN_MODE_COUNT) mode = PATTERN_MODE_LINEAR;
+    ss->p_mode[pattern] = mode;
+}
+
+uint8_t ss_get_pattern_dir(scene_state_t *ss, size_t pattern) {
+    return ss->p_dir[pattern];
+}
+
+void ss_set_pattern_dir(scene_state_t *ss, size_t pattern, uint8_t dir) {
+    ss->p_dir[pattern] = dir ? 1 : 0;
+}
+
+int8_t ss_get_pattern_stride(scene_state_t *ss, size_t pattern) {
+    return ss->p_stride[pattern];
+}
+
+void ss_set_pattern_stride(scene_state_t *ss, size_t pattern, int8_t stride) {
+    if (stride < 1) stride = 1;
+    ss->p_stride[pattern] = stride;
 }
 
 scene_pattern_t *ss_patterns_ptr(scene_state_t *ss) {
