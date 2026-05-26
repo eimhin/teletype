@@ -134,6 +134,8 @@
         "PN.STEP"     => { MATCH_OP(E_OP_PN_STEP); };
         "P.STEP.NEW"  => { MATCH_OP(E_OP_P_STEP_NEW); };
         "PN.STEP.NEW" => { MATCH_OP(E_OP_PN_STEP_NEW); };
+        "P.STEP?"     => { MATCH_OP(E_OP_P_STEPQ); };
+        "PN.STEP?"    => { MATCH_OP(E_OP_PN_STEPQ); };
         "P.+"         => { MATCH_OP(E_OP_P_ADD); };
         "PN.+"        => { MATCH_OP(E_OP_PN_ADD); };
         "P.-"         => { MATCH_OP(E_OP_P_SUB); };

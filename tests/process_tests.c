@@ -686,6 +686,39 @@ TEST test_PN_STEP_independence() {
     PASS();
 }
 
+TEST test_P_STEPQ() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // 2-cell pattern, dur[0]=2, dur[1]=1. P.STEP? should advance just
+    // like P.STEP but push the just_advanced flag instead of val.
+    char* setup[7] = { "P.L 2",   "P.WRAP 1", "P 0 100", "P 1 200",
+                       "P.D 0 2", "P.D 1 1",  "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 7, setup, 2));
+
+    // tick 1: dwell 0 -> entering, NEW=1 -> P.STEP? returns 1.
+    char* q[1] = { "P.STEP?" };
+    CHECK_CALL(process_helper_state(&ss, 1, q, 1));
+    // P.HERE confirms idx is still 0 (val[0]=100).
+    char* here[1] = { "P.HERE" };
+    CHECK_CALL(process_helper_state(&ss, 1, here, 100));
+
+    // tick 2: dwell 1 -> hold (2 <= dur 2), NEW=0 -> P.STEP? returns 0.
+    CHECK_CALL(process_helper_state(&ss, 1, q, 0));
+    CHECK_CALL(process_helper_state(&ss, 1, here, 100));
+
+    // tick 3: dwell 2 -> advance, NEW=1, idx becomes 1, P.STEP? -> 1.
+    CHECK_CALL(process_helper_state(&ss, 1, q, 1));
+    CHECK_CALL(process_helper_state(&ss, 1, here, 200));
+
+    // P.STEP?'s side effect is identical to P.STEP — confirm P.STEP.NEW
+    // reads the same latch right after.
+    char* new_op[1] = { "P.STEP.NEW" };
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 1));
+
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -713,4 +746,5 @@ SUITE(process_suite) {
     RUN_TEST(test_P_STEP_dwells);
     RUN_TEST(test_P_I_resets_dwell);
     RUN_TEST(test_PN_STEP_independence);
+    RUN_TEST(test_P_STEPQ);
 }

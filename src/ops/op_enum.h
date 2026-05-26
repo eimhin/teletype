@@ -126,6 +126,8 @@ typedef enum {
     E_OP_PN_STEP,
     E_OP_P_STEP_NEW,
     E_OP_PN_STEP_NEW,
+    E_OP_P_STEPQ,
+    E_OP_PN_STEPQ,
     E_OP_Q,
     E_OP_Q_AVG,
     E_OP_Q_N,

@@ -1232,11 +1232,33 @@ static void op_PN_STEP_NEW_get(const void *NOTUSED(data), scene_state_t *ss,
     cs_push(cs, ss->p_just_advanced[pn] ? 1 : 0);
 }
 
+// P.STEP? / PN.STEP? — advance like P.STEP but push the just_advanced
+// flag instead of val[]. Lets a script gate something with IF in a
+// single op call: `IF P.STEP?: SCRIPT 2` advances and only triggers when
+// the playhead just entered a new stage.
+static void op_P_STEPQ_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    p_step(ss, pn);
+    cs_push(cs, ss->p_just_advanced[pn] ? 1 : 0);
+    tele_pattern_updated();
+}
+
+static void op_PN_STEPQ_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    p_step(ss, pn);
+    cs_push(cs, ss->p_just_advanced[pn] ? 1 : 0);
+    tele_pattern_updated();
+}
+
 // clang-format off
 const tele_op_t op_P_STEP        = MAKE_GET_OP(P.STEP,        op_P_STEP_get,        0, true);
 const tele_op_t op_PN_STEP       = MAKE_GET_OP(PN.STEP,       op_PN_STEP_get,       1, true);
 const tele_op_t op_P_STEP_NEW    = MAKE_GET_OP(P.STEP.NEW,    op_P_STEP_NEW_get,    0, true);
 const tele_op_t op_PN_STEP_NEW   = MAKE_GET_OP(PN.STEP.NEW,   op_PN_STEP_NEW_get,   1, true);
+const tele_op_t op_P_STEPQ       = MAKE_GET_OP(P.STEP?,       op_P_STEPQ_get,       0, true);
+const tele_op_t op_PN_STEPQ      = MAKE_GET_OP(PN.STEP?,      op_PN_STEPQ_get,      1, true);
 // clang-format on
 
 
