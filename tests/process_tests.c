@@ -561,6 +561,131 @@ TEST test_P_D_RND() {
     PASS();
 }
 
+TEST test_P_STEP_basic() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // 4-cell pattern with notes 60, 64, 67, 72 and uniform dur=1.
+    // P.STEP should behave exactly like P.NEXT in this case. End the
+    // setup sequence with a getter (P.L) so process_helper_state has a
+    // value to assert.
+    char* setup[8] = { "P.L 4",  "P.WRAP 1", "P 0 60", "P 1 64",
+                       "P 2 67", "P 3 72",   "P.I 0",  "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 8, setup, 4));
+
+    // First STEP enters stage 0 with STEP.NEW=1 (dwell starts at 0).
+    char* step1[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step1, 60));
+    char* new1[1] = { "P.STEP.NEW" };
+    CHECK_CALL(process_helper_state(&ss, 1, new1, 1));
+
+    // dur=1 everywhere -> every subsequent STEP advances.
+    char* step2[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step2, 64));
+    char* step3[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step3, 67));
+    char* step4[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step4, 72));
+    // wrap back to idx 0
+    char* step5[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step5, 60));
+
+    PASS();
+}
+
+TEST test_P_STEP_dwells() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // 2-cell pattern, dur[0]=3, dur[1]=1.
+    char* setup[8] = { "P.L 2",   "P.WRAP 1", "P 0 100", "P 1 200",
+                       "P.D 0 3", "P.D 1 1",  "P.I 0",   "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 8, setup, 2));
+
+    // tick 1: dwell 0 -> entering, idx=0, value=100, NEW=1.
+    char* t1_step[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, t1_step, 100));
+    char* new_op[1] = { "P.STEP.NEW" };
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 1));
+
+    // tick 2: dwell 1 -> hold (2 <= dur 3), NEW=0.
+    CHECK_CALL(process_helper_state(&ss, 1, t1_step, 100));
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 0));
+
+    // tick 3: dwell 2 -> hold (3 <= dur 3), NEW=0.
+    CHECK_CALL(process_helper_state(&ss, 1, t1_step, 100));
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 0));
+
+    // tick 4: dwell 3 -> advance (4 > dur 3), idx=1, value=200, NEW=1.
+    CHECK_CALL(process_helper_state(&ss, 1, t1_step, 200));
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 1));
+
+    // tick 5: dwell 1 -> advance (2 > dur 1) wrapping to idx=0, NEW=1.
+    CHECK_CALL(process_helper_state(&ss, 1, t1_step, 100));
+    CHECK_CALL(process_helper_state(&ss, 1, new_op, 1));
+
+    PASS();
+}
+
+TEST test_P_I_resets_dwell() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Get partway through a long stage, then write P.I and confirm the
+    // next P.STEP enters the new stage fresh (NEW=1) instead of
+    // immediately advancing past it.
+    char* setup[7] = { "P.L 4",   "P.WRAP 1", "P 0 10", "P 1 20",
+                       "P.D 0 5", "P.D 1 5",  "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 7, setup, 4));
+
+    char* step_in[1] = { "P.STEP" };
+    CHECK_CALL(process_helper_state(&ss, 1, step_in, 10));  // enter idx 0
+    CHECK_CALL(process_helper_state(&ss, 1, step_in, 10));  // dwell 2
+    CHECK_CALL(process_helper_state(&ss, 1, step_in, 10));  // dwell 3
+    // dwell is now 3 on idx 0 (dur 5 -> not yet over).
+
+    // Reset to idx 1 mid-flight. Use a 2-line sequence ending in a
+    // getter so process_helper_state has a value to assert.
+    char* reset[2] = { "P.I 1", "P.I" };
+    CHECK_CALL(process_helper_state(&ss, 2, reset, 1));
+
+    // Next STEP enters stage 1 fresh: value=20, NEW=1.
+    CHECK_CALL(process_helper_state(&ss, 1, step_in, 20));
+    char* after_new[1] = { "P.STEP.NEW" };
+    CHECK_CALL(process_helper_state(&ss, 1, after_new, 1));
+
+    PASS();
+}
+
+TEST test_PN_STEP_independence() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Two patterns with different durations stepped independently. End
+    // with a getter so the helper has a value to assert.
+    char* setup[9] = { "PN.L 0 2",   "PN 0 0 1",   "PN 0 1 2",
+                       "PN.D 0 0 2", "PN.L 1 2",   "PN 1 0 10",
+                       "PN 1 1 20",  "PN.D 1 0 1", "PN.L 0" };
+    CHECK_CALL(process_helper_state(&ss, 9, setup, 2));
+
+    // Pattern 0: dur 2 -> two ticks per cell.
+    char* p0_step[1] = { "PN.STEP 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, p0_step, 1));  // enter idx 0
+    CHECK_CALL(process_helper_state(&ss, 1, p0_step, 1));  // hold
+    CHECK_CALL(process_helper_state(&ss, 1, p0_step, 2));  // advance
+
+    // Pattern 1: dur 1 -> advance every tick.
+    char* p1_step[1] = { "PN.STEP 1" };
+    CHECK_CALL(process_helper_state(&ss, 1, p1_step, 10));  // enter
+    CHECK_CALL(process_helper_state(&ss, 1, p1_step, 20));  // advance
+
+    // Pattern 0's last advance was the third step above -> NEW=1.
+    char* p0_new[1] = { "PN.STEP.NEW 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, p0_new, 1));
+
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -584,4 +709,8 @@ SUITE(process_suite) {
     RUN_TEST(test_P_D_HERE);
     RUN_TEST(test_PN_D_family);
     RUN_TEST(test_P_D_RND);
+    RUN_TEST(test_P_STEP_basic);
+    RUN_TEST(test_P_STEP_dwells);
+    RUN_TEST(test_P_I_resets_dwell);
+    RUN_TEST(test_PN_STEP_independence);
 }

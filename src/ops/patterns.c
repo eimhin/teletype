@@ -316,6 +316,11 @@ static void p_i_set(scene_state_t *ss, int16_t pn, int16_t i) {
         ss_set_pattern_idx(ss, pn, len - 1);
     else
         ss_set_pattern_idx(ss, pn, i);
+    // Writing idx invalidates dwell: a fresh stage starts on the next
+    // P.STEP, with STEP.NEW=1. Single rule covers init (P.I 0 in #I)
+    // and mid-run resets from a reset jack alike.
+    ss->p_dwell[pn] = 0;
+    ss->p_just_advanced[pn] = 0;
     tele_pattern_updated();
 }
 
@@ -1167,6 +1172,71 @@ const tele_op_t op_P_D_HERE   = MAKE_GET_SET_OP(P.D.HERE,   op_P_D_HERE_get,   o
 const tele_op_t op_PN_D_HERE  = MAKE_GET_SET_OP(PN.D.HERE,  op_PN_D_HERE_get,  op_PN_D_HERE_set,  1, true);
 const tele_op_t op_P_D_RND    = MAKE_GET_OP(P.D.RND,        op_P_D_RND_get,    2, false);
 const tele_op_t op_PN_D_RND   = MAKE_GET_OP(PN.D.RND,       op_PN_D_RND_get,   3, false);
+// clang-format on
+
+
+////////////////////////////////////////////////////////////////////////////////
+// P.STEP, PN.STEP, P.STEP.NEW, PN.STEP.NEW ////////////////////////////////////
+// Duration-aware playhead advance. P.STEP bumps an internal dwell counter
+// and only advances idx (via the existing p_next_inc_i helper) when dwell
+// reaches the current cell's dur[]. P.STEP.NEW returns 1 on the tick a
+// stage just began — including the first STEP after init or a P.I reset.
+
+// Advance Saga by one tick. Returns the val[] at the current idx after
+// the step. Sets p_just_advanced[pn] = 1 iff idx just moved (or this is
+// the first tick of a fresh stage after init/reset).
+static int16_t p_step(scene_state_t *ss, int16_t pn) {
+    pn = normalise_pn(pn);
+    const int16_t dur = ss_get_pattern_dur(ss, pn, ss_get_pattern_idx(ss, pn));
+
+    if (ss->p_dwell[pn] == 0) {
+        // entering a stage fresh (after init or a P.I write).
+        ss->p_dwell[pn] = 1;
+        ss->p_just_advanced[pn] = 1;
+    }
+    else if (ss->p_dwell[pn] + 1 > dur) {
+        // current stage is over — advance to the next cell.
+        p_next_inc_i(ss, pn);
+        ss->p_dwell[pn] = 1;
+        ss->p_just_advanced[pn] = 1;
+    }
+    else {
+        ss->p_dwell[pn] = ss->p_dwell[pn] + 1;
+        ss->p_just_advanced[pn] = 0;
+    }
+    return ss_get_pattern_val(ss, pn, ss_get_pattern_idx(ss, pn));
+}
+
+static void op_P_STEP_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    cs_push(cs, p_step(ss, ss->variables.p_n));
+    tele_pattern_updated();
+}
+
+static void op_PN_STEP_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    cs_push(cs, p_step(ss, pn));
+    tele_pattern_updated();
+}
+
+static void op_P_STEP_NEW_get(const void *NOTUSED(data), scene_state_t *ss,
+                              exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    cs_push(cs, ss->p_just_advanced[pn] ? 1 : 0);
+}
+
+static void op_PN_STEP_NEW_get(const void *NOTUSED(data), scene_state_t *ss,
+                               exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    cs_push(cs, ss->p_just_advanced[pn] ? 1 : 0);
+}
+
+// clang-format off
+const tele_op_t op_P_STEP        = MAKE_GET_OP(P.STEP,        op_P_STEP_get,        0, true);
+const tele_op_t op_PN_STEP       = MAKE_GET_OP(PN.STEP,       op_PN_STEP_get,       1, true);
+const tele_op_t op_P_STEP_NEW    = MAKE_GET_OP(P.STEP.NEW,    op_P_STEP_NEW_get,    0, true);
+const tele_op_t op_PN_STEP_NEW   = MAKE_GET_OP(PN.STEP.NEW,   op_PN_STEP_NEW_get,   1, true);
 // clang-format on
 
 
