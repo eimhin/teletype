@@ -9,6 +9,7 @@
 #define STATE_SCRIPT 3
 #define STATE_PATTERNS 4
 #define STATE_GRID 5
+#define STATE_PATTERN_DURATIONS 6
 
 uint8_t grid_state = 0;
 uint16_t grid_count = 0;
@@ -140,6 +141,38 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
         }
     }
 
+    // pattern durations (#D). Only emitted when any cell holds a
+    // non-default duration — keeps existing presets byte-identical
+    // through round-trip and makes the section forward-compatible (older
+    // firmware will treat #D as an unknown section letter and skip it).
+    bool any_dur_set = false;
+    for (int b = 0; b < PATTERN_COUNT && !any_dur_set; b++) {
+        for (int l = 0; l < PATTERN_LENGTH; l++) {
+            if (ss_get_pattern_dur(scene, b, l) != 1) {
+                any_dur_set = true;
+                break;
+            }
+        }
+    }
+    if (any_dur_set) {
+        stream->write_char(stream->data, '\n');
+        stream->write_char(stream->data, '#');
+        stream->write_char(stream->data, 'D');
+        stream->write_char(stream->data, '\n');
+
+        for (int l = 0; l < 64; l++) {
+            for (int b = 0; b < PATTERN_COUNT; b++) {
+                itoa(ss_get_pattern_dur(scene, b, l), input, 10);
+                stream->write_buffer(stream->data, (uint8_t*)input,
+                                     strlen(input));
+                if (b == PATTERN_COUNT - 1)
+                    stream->write_char(stream->data, '\n');
+                else
+                    stream->write_char(stream->data, '\t');
+            }
+        }
+    }
+
     // serialize grid
 
     char fvalue[36];
@@ -225,6 +258,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                 s2 = STATE_SCRIPT;
             }
             else if (c == 'P') { s2 = STATE_PATTERNS; }
+            else if (c == 'D') { s2 = STATE_PATTERN_DURATIONS; }
             else if (c == 'G') {
                 grid_state = grid_count = 0;
                 s2 = STATE_GRID;
@@ -352,14 +386,13 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
 
             if (c == '\n' || c == '\t') {
                 if (b < PATTERN_COUNT) {
-                    if (l > 3) {
+                    if (l > 3 && (l - 4) < PATTERN_LENGTH) {
+                        // bound check matters now that dur[] sits
+                        // immediately after val[] in scene_pattern_t —
+                        // without it, the blank line that follows the
+                        // 64th value row would land at val[64] and
+                        // corrupt dur[0] of pattern 0.
                         ss_set_pattern_val(scene, b, l - 4, neg * num);
-                        // stream->print_dbg("\r\nset: ");
-                        // stream->print_dbg_ulong(b);
-                        // stream->print_dbg(" ");
-                        // stream->print_dbg_ulong(l-4);
-                        // stream->print_dbg(" ");
-                        // stream->print_dbg_ulong(num);
                     }
                     else if (l == 0) { ss_set_pattern_len(scene, b, num); }
                     else if (l == 1) { ss_set_pattern_wrap(scene, b, num); }
@@ -386,6 +419,35 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                     // stream->print_dbg("\r\nnum: ");
                     // stream->print_dbg_ulong(num);
                 }
+                p++;
+            }
+            continue;
+        }
+
+        // PATTERN DURATIONS
+        if (s == STATE_PATTERN_DURATIONS) {
+            // 64 rows of PATTERN_COUNT tab-separated dur values, no header.
+
+            if (c == '\n' || c == '\t') {
+                if (b < PATTERN_COUNT && l < PATTERN_LENGTH) {
+                    ss_set_pattern_dur(scene, b, l, neg * num);
+                }
+
+                b++;
+                num = 0;
+                neg = 1;
+
+                if (c == '\n') {
+                    if (p) l++;
+                    if (l >= PATTERN_LENGTH) s = -1;
+                    b = 0;
+                    p = 0;
+                }
+            }
+            else {
+                if (c == '-')
+                    neg = -1;
+                else if (c >= '0' && c <= '9') { num = num * 10 + (c - 48); }
                 p++;
             }
             continue;

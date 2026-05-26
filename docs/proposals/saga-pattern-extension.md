@@ -175,16 +175,18 @@ of 8 patterns each), then 64 rows of 8 tab-separated values. The
 deserializer state machine tracks `l` (line within `#P`) and `b`
 (pattern index).
 
-Add a parallel `#PD` section directly after `#P`: 64 rows of 8
-tab-separated durations. In `deserialize_scene`, recognize `#PD` as a
+Add a parallel `#D` section directly after `#P`: 64 rows of 8
+tab-separated durations. In `deserialize_scene`, recognize `#D` as a
 new section state (`STATE_PATTERN_DURATIONS`) routed from
-`STATE_POUND`, mirroring the existing `#P` parser but writing into
-`dur[]` via a new `ss_set_pattern_dur()` accessor.
+`STATE_POUND` like every other section marker, mirroring the
+value-row portion of the `#P` parser but writing into `dur[]` via a new
+`ss_set_pattern_dur()` accessor.
 
-**Backward compatibility**: a missing `#PD` section means existing
+**Backward compatibility**: a missing `#D` section means existing
 preset files load with `dur[]` left at the defaults set by
-`ss_init()` (durations all 1). This is essential — without it, the
-`presets/tt*.txt` files in the repo would silently break.
+`ss_init()` (durations all 1). The serializer also skips emitting `#D`
+when every cell holds the default — so factory presets in
+`presets/tt*.txt` round-trip byte-identical without modification.
 
 Defaults on init: `dur[i] = 1` for every cell of every pattern, set in
 `ss_init` / `ss_clear_scripts_and_patterns` in `src/state.c`.
@@ -227,9 +229,10 @@ Makefiles need **no changes**:
 - `module/flash.h` — no change (`scene_pattern_t` grows automatically).
 
 **Scene serialization**
-- `src/scene_serialization.c` — emit `#PD` section in `serialize_scene`;
-  parse it in `deserialize_scene` with a new state symmetrical to
-  `STATE_PATTERNS`.
+- `src/scene_serialization.c` — emit `#D` section in `serialize_scene`
+  (only when any cell holds a non-default duration); parse it in
+  `deserialize_scene` with a new `STATE_PATTERN_DURATIONS` routed from
+  `STATE_POUND` alongside the existing single-char section letters.
 
 ### Tests
 
@@ -250,7 +253,7 @@ Makefiles need **no changes**:
     `[hi..lo]`).
 - `tests/serialize_scene_test.c` (or similar) — round-trip a scene
   with populated `dur[]`. Also confirm a pre-existing preset text
-  (no `#PD`) loads with default durations.
+  (no `#D`) loads with default durations.
 - After wiring, `op_mod_test` is the consistency check on
   `tele_ops[]` vs the regenerated enum (CLAUDE.md "Op table gotchas").
 
@@ -271,7 +274,7 @@ Makefiles need **no changes**:
    teletype that has saved presets, confirm `flash_prepare()` wipes
    them cleanly (no garbage scenes, no crashes), and the user gets a
    fresh slate. Reload a known-good preset text file via USB disk →
-   confirm `dur[]` deserializes correctly (or defaults if `#PD`
+   confirm `dur[]` deserializes correctly (or defaults if `#D`
    absent).
 6. PATTERN mode: enter mode, press `~` to switch to duration view, edit
    some durations, press `~` again to confirm it toggles back, exit

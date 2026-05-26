@@ -230,6 +230,74 @@ TEST test_deserialize_legacy_4pattern_scene() {
     PASS();
 }
 
+// Round-trip per-cell durations through the #PD section.
+TEST test_round_trip_pattern_durations() {
+    scene_state_t scene_a, scene_b;
+    ss_init(&scene_a);
+    ss_init(&scene_b);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    // Populate durations only — pattern values stay at default 0.
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        for (int i = 0; i < PATTERN_LENGTH; i++) {
+            ss_set_pattern_dur(&scene_a, p, i, (int16_t)((p + 1) + (i % 7)));
+        }
+    }
+
+    char buffer[32768];
+    memset(buffer, 0, sizeof(buffer));
+    stringsource out_ss = { .buffer = buffer, .length = 0, .position = 0 };
+    test_string_writer.data = (void*)&out_ss;
+    serialize_scene(&test_string_writer, &scene_a, &text);
+
+    stringsource in_ss = { .buffer = buffer,
+                           .length = out_ss.length,
+                           .position = 0 };
+    test_string_reader.data = (void*)&in_ss;
+    deserialize_scene(&test_string_reader, &scene_b, &text);
+
+    for (int p = 0; p < PATTERN_COUNT; p++) {
+        for (int i = 0; i < PATTERN_LENGTH; i++) {
+            ASSERT_EQ((int16_t)((p + 1) + (i % 7)),
+                      ss_get_pattern_dur(&scene_b, p, i));
+        }
+    }
+    PASS();
+}
+
+// A preset text without a #PD section must leave dur[] at the post-init
+// default of 1. Critical for backward compat with existing presets.
+TEST test_deserialize_without_pd_leaves_default_durs() {
+    scene_state_t scene;
+    ss_init(&scene);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    // Minimal #P block with no #PD trailer.
+    char fragment[8192];
+    int p = 0;
+    p += snprintf(fragment + p, sizeof(fragment) - p,
+                  "#P\n2\t0\t0\t0\t0\t0\t0\t0\n"
+                  "1\t0\t0\t0\t0\t0\t0\t0\n"
+                  "0\t0\t0\t0\t0\t0\t0\t0\n"
+                  "1\t0\t0\t0\t0\t0\t0\t0\n");
+    for (int i = 0; i < 64; i++)
+        p += snprintf(fragment + p, sizeof(fragment) - p,
+                      "0\t0\t0\t0\t0\t0\t0\t0\n");
+
+    deserialize_fragment(fragment, &scene, &text);
+
+    for (int pat = 0; pat < PATTERN_COUNT; pat++) {
+        for (int i = 0; i < PATTERN_LENGTH; i++) {
+            ASSERT_EQ(1, ss_get_pattern_dur(&scene, pat, i));
+        }
+    }
+    PASS();
+}
+
 TEST test_deserialize_fragment_script_basic() {
     scene_state_t scene;
     ss_init(&scene);
@@ -279,6 +347,8 @@ SUITE(serialize_scene_suite) {
               "./test_output/tt09.txt");
     RUN_TEST(test_round_trip_all_patterns);
     RUN_TEST(test_deserialize_legacy_4pattern_scene);
+    RUN_TEST(test_round_trip_pattern_durations);
+    RUN_TEST(test_deserialize_without_pd_leaves_default_durs);
     RUN_TEST(test_deserialize_fragment_script_basic);
     log_print();
 }
