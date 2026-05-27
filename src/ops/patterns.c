@@ -1073,6 +1073,200 @@ const tele_op_t op_P_MOTIF = MAKE_GET_OP(P.MOTIF, op_P_MOTIF_get, 3, false);
 const tele_op_t op_PN_MOTIF = MAKE_GET_OP(PN.MOTIF, op_PN_MOTIF_get, 4, false);
 
 ////////////////////////////////////////////////////////////////////////////////
+// P.CP / PN.CP — diatonic two-voice counterpoint reader //////////////////////
+//
+// Stateless read-only op: returns a diatonic degree forming counterpoint
+// against pattern[P.I] using the full START..END window for context.
+// Input and output are diatonic scale degrees (1..7 = one octave), to pair
+// with P.MOTIF and N.S / QT.S.
+
+typedef struct {
+    int16_t vmin, vmax;
+    int16_t peak_index, valley_index;
+    int8_t global_direction;
+    int8_t ends_on_tonic;
+} cp_window_analysis_t;
+
+static int16_t cp_clamp_i16(int32_t v) {
+    if (v > INT16_MAX) return INT16_MAX;
+    if (v < INT16_MIN) return INT16_MIN;
+    return (int16_t)v;
+}
+
+static void cp_analyse_window(scene_state_t *ss, int16_t pn, int16_t start,
+                              int16_t end, cp_window_analysis_t *w) {
+    int16_t first = ss_get_pattern_val(ss, pn, start);
+    int16_t last = ss_get_pattern_val(ss, pn, end);
+    w->vmin = first;
+    w->vmax = first;
+    w->peak_index = start;
+    w->valley_index = start;
+    for (int16_t i = start; i <= end; i++) {
+        int16_t v = ss_get_pattern_val(ss, pn, i);
+        if (v > w->vmax) {
+            w->vmax = v;
+            w->peak_index = i;
+        }
+        if (v < w->vmin) {
+            w->vmin = v;
+            w->valley_index = i;
+        }
+    }
+    if (last > first)
+        w->global_direction = 1;
+    else if (last < first)
+        w->global_direction = -1;
+    else
+        w->global_direction = 0;
+    int16_t r = ((last - 1) % 7 + 7) % 7;
+    w->ends_on_tonic = (r == 0) ? 1 : 0;
+}
+
+static int16_t cp_compute(scene_state_t *ss, int16_t pn, int16_t rule,
+                          int16_t offset) {
+    pn = normalise_pn(pn);
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    int16_t cur_idx = ss_get_pattern_idx(ss, pn);
+
+    if (end < start) {
+        return cp_clamp_i16((int32_t)ss_get_pattern_val(ss, pn, cur_idx) +
+                            offset);
+    }
+    if (end == start) {
+        return cp_clamp_i16((int32_t)ss_get_pattern_val(ss, pn, start) +
+                            offset);
+    }
+
+    int16_t L = end - start + 1;
+    int16_t i = cur_idx;
+    if (i < start || i > end) i = ((i - start) % L + L) % L + start;
+
+    rule = ((rule % 8) + 8) % 8;
+
+    int16_t cf_now = ss_get_pattern_val(ss, pn, i);
+
+    // CANON: bypass scoring, read from earlier in the window.
+    if (rule == 6) {
+        int16_t delay = (L >= 4) ? L / 4 : 1;
+        int16_t read_pos = ((i - start - delay) % L + L) % L + start;
+        return cp_clamp_i16((int32_t)ss_get_pattern_val(ss, pn, read_pos) +
+                            offset);
+    }
+
+    cp_window_analysis_t w;
+    cp_analyse_window(ss, pn, start, end, &w);
+
+    int16_t cf_prev = (i > start) ? ss_get_pattern_val(ss, pn, i - 1)
+                                  : ss_get_pattern_val(ss, pn, end);
+    int local_motion = (int)cf_now - (int)cf_prev;
+    int position_pct = ((i - start) * 100) / (L - 1);
+    int near_end = (position_pct > 80) ? 1 : 0;
+
+    // 3rds, 6ths, 5ths, octaves — consonant intervals in diatonic writing.
+    static const int8_t intervals[] = { 2, -2, 5, -5, 4, -4, 7, -7 };
+
+    int32_t target = (int32_t)cf_now + (int32_t)offset;
+    int32_t best = target + 2;
+    int best_score = -10000;
+
+    int axis = (((int)w.vmin + (int)w.vmax) / 2) + (int)offset;
+    // Floor-divide cf_now-1 by 7 (C truncates toward zero, which would
+    // misplace tonic_octave for cf_now <= 0).
+    int t = (int)cf_now - 1;
+    int oct = (t >= 0) ? t / 7 : -(((-t) + 6) / 7);
+    int tonic_octave = oct * 7 + 1 + (int)offset;
+
+    for (int c = 0; c < 8; c++) {
+        int cp_motion = intervals[c];
+        int32_t candidate = target + cp_motion;
+        int score = 10;
+
+        if ((local_motion > 0 && cp_motion < 0) ||
+            (local_motion < 0 && cp_motion > 0))
+            score += 15;
+
+        int total_range = (int)w.vmax - (int)w.vmin;
+        if (total_range > 0) {
+            int melody_pos_in_range = (int)cf_now - (int)w.vmin;
+            if (melody_pos_in_range < total_range / 3 && cp_motion > 0)
+                score += 10;
+            if (melody_pos_in_range > 2 * total_range / 3 && cp_motion < 0)
+                score += 10;
+        }
+
+        if (near_end && w.ends_on_tonic) {
+            if (cp_motion == 2 || cp_motion == 4 || cp_motion == 7) score += 15;
+        }
+
+        switch (rule) {
+            case 0:  // BALANCED
+                break;
+            case 1:  // CONTRARY
+                if ((local_motion > 0 && cp_motion < 0) ||
+                    (local_motion < 0 && cp_motion > 0))
+                    score += 25;
+                else if (local_motion != 0)
+                    score -= 20;
+                if (w.global_direction > 0 && cp_motion < 0) score += 10;
+                if (w.global_direction < 0 && cp_motion > 0) score += 10;
+                break;
+            case 2:  // PARALLEL — favour 3rds and 6ths above
+                if (cp_motion == 2 || cp_motion == 5) score += 30;
+                break;
+            case 3:  // BASS — stay below, prefer 5ths and octaves
+                if (cp_motion > 0) score -= 100;
+                if (cp_motion == -4 || cp_motion == -7) score += 20;
+                break;
+            case 4: {  // MIRROR — invert around axis (axis shifted by offset)
+                int mirrored = 2 * axis - (int)cf_now;
+                int diff = (int)candidate - mirrored;
+                if (diff < 0) diff = -diff;
+                if (diff <= 1) score += 50;
+                break;
+            }
+            case 5: {  // OBLIQUE — pull toward tonic-octave
+                int dist = (int)candidate - tonic_octave;
+                if (dist < 0) dist = -dist;
+                score += (20 - dist * 5);
+                break;
+            }
+            case 7:  // FOLLOW — same direction as melody
+                if ((local_motion > 0 && cp_motion > 0) ||
+                    (local_motion < 0 && cp_motion < 0))
+                    score += 25;
+                break;
+            default: break;
+        }
+
+        if (score > best_score) {
+            best_score = score;
+            best = candidate;
+        }
+    }
+
+    return cp_clamp_i16(best);
+}
+
+static void op_P_CP_get(const void *NOTUSED(data), scene_state_t *ss,
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t rule = cs_pop(cs);
+    int16_t offset = cs_pop(cs);
+    cs_push(cs, cp_compute(ss, ss->variables.p_n, rule, offset));
+}
+
+static void op_PN_CP_get(const void *NOTUSED(data), scene_state_t *ss,
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t rule = cs_pop(cs);
+    int16_t offset = cs_pop(cs);
+    cs_push(cs, cp_compute(ss, pn, rule, offset));
+}
+
+const tele_op_t op_P_CP = MAKE_GET_OP(P.CP, op_P_CP_get, 2, true);
+const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
+
+////////////////////////////////////////////////////////////////////////////////
 // P.+ P.+W ////////////////////////////////////////////////////////////////////
 
 static void p_add_get(scene_state_t *ss, int16_t pn, int16_t idx, int16_t delta,

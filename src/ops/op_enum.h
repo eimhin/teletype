@@ -136,6 +136,8 @@ typedef enum {
     E_OP_PN_STRIDE,
     E_OP_P_MOTIF,
     E_OP_PN_MOTIF,
+    E_OP_P_CP,
+    E_OP_PN_CP,
     E_OP_Q,
     E_OP_Q_AVG,
     E_OP_Q_N,

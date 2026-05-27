@@ -1154,6 +1154,280 @@ TEST test_P_MOTIF_window_length_1() {
     PASS();
 }
 
+// Helpers for P.CP tests. We bypass parse/process for state setup and just
+// poke pattern fields directly — keeps these tests focused on cp_compute.
+
+static void cp_setup_window(scene_state_t* ss, int start, int end,
+                            const int16_t* melody) {
+    ss_set_pattern_start(ss, 0, (int16_t)start);
+    ss_set_pattern_end(ss, 0, (int16_t)end);
+    ss_set_pattern_len(ss, 0, (int16_t)(end + 1));
+    for (int i = start; i <= end; i++) {
+        ss_set_pattern_val(ss, 0, (int16_t)i, melody[i - start]);
+    }
+    ss_set_pattern_idx(ss, 0, (int16_t)start);
+}
+
+static int16_t cp_run(scene_state_t* ss, int16_t i, int rule, int offset) {
+    ss_set_pattern_idx(ss, 0, i);
+    char cp_cmd[32];
+    snprintf(cp_cmd, sizeof(cp_cmd), "P.CP %d %d", rule, offset);
+
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(cp_cmd, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t result = process_command(ss, &es, &cmd);
+    return result.value;
+}
+
+TEST test_P_CP_determinism() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int16_t a = cp_run(&ss, 3, 0, 0);
+    int16_t b = cp_run(&ss, 3, 0, 0);
+    int16_t c = cp_run(&ss, 3, 0, 0);
+    ASSERT_EQ(a, b);
+    ASSERT_EQ(b, c);
+    PASS();
+}
+
+TEST test_P_CP_no_side_effects() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int16_t before[8];
+    for (int i = 0; i < 8; i++) before[i] = ss_get_pattern_val(&ss, 0, i);
+    int16_t idx_before = ss_get_pattern_idx(&ss, 0);
+    (void)cp_run(&ss, idx_before, 0, 0);
+    for (int i = 0; i < 8; i++)
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), before[i]);
+    ASSERT_EQ(ss_get_pattern_idx(&ss, 0), idx_before);
+    PASS();
+}
+
+TEST test_P_CP_consonance() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int rules[] = { 0, 1, 2, 3, 5, 7 };
+    for (size_t r = 0; r < sizeof(rules) / sizeof(rules[0]); r++) {
+        for (int i = 0; i < 8; i++) {
+            int16_t cp = cp_run(&ss, i, rules[r], 0);
+            int diff = cp - melody[i];
+            int absd = diff < 0 ? -diff : diff;
+            // Allowed consonant intervals (and unison fallback at edges).
+            int ok = (absd == 2 || absd == 4 || absd == 5 || absd == 7);
+            ASSERT(ok);
+        }
+    }
+    PASS();
+}
+
+TEST test_P_CP_canon_arithmetic() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[16];
+    for (int i = 0; i < 16; i++) melody[i] = (int16_t)(i + 1);
+    cp_setup_window(&ss, 0, 15, melody);
+    // L=16, delay = 16/4 = 4, P.I=4 -> read_pos = 0.
+    int16_t cp = cp_run(&ss, 4, 6, 0);
+    ASSERT_EQ(cp, melody[0]);
+    PASS();
+}
+
+TEST test_P_CP_canon_offset() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[16];
+    for (int i = 0; i < 16; i++) melody[i] = (int16_t)(i + 1);
+    cp_setup_window(&ss, 0, 15, melody);
+    int16_t base = cp_run(&ss, 7, 6, 0);
+    int16_t shifted = cp_run(&ss, 7, 6, 4);
+    ASSERT_EQ(shifted, base + 4);
+    PASS();
+}
+
+TEST test_P_CP_bass_below() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 5, 7, 6, 9, 8, 10, 9, 11 };
+    cp_setup_window(&ss, 0, 7, melody);
+    for (int i = 0; i < 8; i++) {
+        int16_t cp = cp_run(&ss, i, 3, 0);
+        ASSERT(cp < melody[i]);
+    }
+    PASS();
+}
+
+TEST test_P_CP_mirror_symmetry() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int vmin = 1, vmax = 7;
+    int axis = (vmin + vmax) / 2;
+    for (int i = 0; i < 8; i++) {
+        int16_t cp = cp_run(&ss, i, 4, 0);
+        int sum = cp + melody[i];
+        int target = 2 * axis;
+        int diff = sum - target;
+        if (diff < 0) diff = -diff;
+        // Allow some quantization slack — candidates step by ±2/±4/±5/±7
+        // from cf_now, so the closest mirror may miss by a few degrees.
+        ASSERT(diff <= 3);
+    }
+    PASS();
+}
+
+TEST test_P_CP_oblique_clustering() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 5, 3, 8, 2, 9, 4, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int16_t cp_vals[8];
+    int16_t cp_min = INT16_MAX, cp_max = INT16_MIN;
+    int16_t m_min = INT16_MAX, m_max = INT16_MIN;
+    for (int i = 0; i < 8; i++) {
+        cp_vals[i] = cp_run(&ss, i, 5, 0);
+        if (cp_vals[i] < cp_min) cp_min = cp_vals[i];
+        if (cp_vals[i] > cp_max) cp_max = cp_vals[i];
+        if (melody[i] < m_min) m_min = melody[i];
+        if (melody[i] > m_max) m_max = melody[i];
+    }
+    ASSERT((cp_max - cp_min) < (m_max - m_min));
+    PASS();
+}
+
+TEST test_P_CP_offset_shifts() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    cp_setup_window(&ss, 0, 7, melody);
+    // For rule 0 (BALANCED), shifting offset shifts target → result shifts
+    // by approximately offset (within candidate quantization ±2).
+    int16_t base = cp_run(&ss, 3, 0, 0);
+    int16_t shifted = cp_run(&ss, 3, 0, 7);
+    int diff = (shifted - base) - 7;
+    if (diff < 0) diff = -diff;
+    ASSERT(diff <= 2);
+    PASS();
+}
+
+TEST test_P_CP_window_wrap() {
+    scene_state_t ss;
+    ss_init(&ss);
+    // Construct a window where pattern[end] differs sharply from pattern[start]
+    // so that cf_prev wrap is detectable via local_motion sign.
+    int16_t melody[8] = { 5, 6, 7, 6, 5, 6, 7, 1 };
+    cp_setup_window(&ss, 0, 7, melody);
+    // At P.I=0, cf_prev should wrap to pattern[7]=1 → local_motion = 5-1 = +4.
+    // For rule 1 CONTRARY this should bias toward cp_motion < 0.
+    int16_t cp = cp_run(&ss, 0, 1, 0);
+    ASSERT(cp < melody[0]);
+    PASS();
+}
+
+TEST test_P_CP_window_length_one() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* prep[3] = { "P.START 3", "P.END 3", "P 3 4" };
+    motif_run(&ss, 3, prep);
+    int16_t cp = cp_run(&ss, 3, 0, 5);
+    ASSERT_EQ(cp, 4 + 5);
+    PASS();
+}
+
+TEST test_P_CP_inverted_window_applies_offset() {
+    // Regression: end<start path used to drop offset. Set start>end manually
+    // and confirm the fallback returns pattern[P.I] + offset.
+    scene_state_t ss;
+    ss_init(&ss);
+    ss_set_pattern_start(&ss, 0, 5);
+    ss_set_pattern_end(&ss, 0, 2);
+    ss_set_pattern_val(&ss, 0, 3, 42);
+    ss_set_pattern_idx(&ss, 0, 3);
+
+    char cp_cmd[] = "P.CP 0 7";
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(cp_cmd, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(&ss, &es, &cmd);
+    ASSERT(r.has_value);
+    ASSERT_EQ(r.value, 42 + 7);
+    PASS();
+}
+
+TEST test_P_CP_oblique_negative_cf() {
+    // Regression: tonic_octave used C truncation, which placed the drone at
+    // degree 1 for cf_now <= 0. With proper floor-division, cf_now in
+    // [-6..0] should pull toward tonic_octave = -6 (degree 1 of the octave
+    // below), not +1. We assert OBLIQUE results stay closer to the cf_now
+    // octave than to the +1 octave.
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { -5, -3, -4, -2, -6, -1, -4, -3 };
+    cp_setup_window(&ss, 0, 7, melody);
+    int closer_below = 0, closer_above = 0;
+    for (int i = 0; i < 8; i++) {
+        int16_t cp = cp_run(&ss, i, 5, 0);
+        int dist_below = cp - (-6);
+        if (dist_below < 0) dist_below = -dist_below;
+        int dist_above = cp - 1;
+        if (dist_above < 0) dist_above = -dist_above;
+        if (dist_below < dist_above) closer_below++;
+        if (dist_above < dist_below) closer_above++;
+    }
+    ASSERT(closer_below > closer_above);
+    PASS();
+}
+
+TEST test_PN_CP_explicit_bank() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t melody[8] = { 1, 3, 2, 5, 4, 6, 5, 7 };
+    // Populate bank 2 directly.
+    char* prep[2] = { "PN.START 2 0", "PN.END 2 7" };
+    motif_run(&ss, 2, prep);
+    for (int i = 0; i < 8; i++) {
+        char line[32];
+        snprintf(line, sizeof(line), "PN 2 %d %d", i, melody[i]);
+        char* l[1] = { line };
+        motif_run(&ss, 1, l);
+    }
+    char* set_i[1] = { "PN.I 2 3" };
+    motif_run(&ss, 1, set_i);
+    // Working bank is still 0; PN.CP 2 ... reads bank 2 explicitly.
+    process_result_t result = { .has_value = false, .value = 0 };
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse("PN.CP 2 0 0", &cmd, error_msg);
+    validate(&cmd, error_msg);
+    result = process_command(&ss, &es, &cmd);
+    ASSERT(result.has_value);
+    int diff = result.value - melody[3];
+    int absd = diff < 0 ? -diff : diff;
+    ASSERT(absd == 2 || absd == 4 || absd == 5 || absd == 7);
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -1203,4 +1477,18 @@ SUITE(process_suite) {
     RUN_TEST(test_P_MOTIF_length_clamping);
     RUN_TEST(test_P_MOTIF_window_respect);
     RUN_TEST(test_P_MOTIF_window_length_1);
+    RUN_TEST(test_P_CP_determinism);
+    RUN_TEST(test_P_CP_no_side_effects);
+    RUN_TEST(test_P_CP_consonance);
+    RUN_TEST(test_P_CP_canon_arithmetic);
+    RUN_TEST(test_P_CP_canon_offset);
+    RUN_TEST(test_P_CP_bass_below);
+    RUN_TEST(test_P_CP_mirror_symmetry);
+    RUN_TEST(test_P_CP_oblique_clustering);
+    RUN_TEST(test_P_CP_offset_shifts);
+    RUN_TEST(test_P_CP_window_wrap);
+    RUN_TEST(test_P_CP_window_length_one);
+    RUN_TEST(test_P_CP_inverted_window_applies_offset);
+    RUN_TEST(test_P_CP_oblique_negative_cf);
+    RUN_TEST(test_PN_CP_explicit_bank);
 }
