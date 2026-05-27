@@ -128,6 +128,8 @@
         "PN.MOTIF"    => { MATCH_OP(E_OP_PN_MOTIF); };
         "P.CP"        => { MATCH_OP(E_OP_P_CP); };
         "PN.CP"       => { MATCH_OP(E_OP_PN_CP); };
+        "P.FUGUE"     => { MATCH_OP(E_OP_P_FUGUE); };
+        "PN.FUGUE"    => { MATCH_OP(E_OP_PN_FUGUE); };
         "P.D"         => { MATCH_OP(E_OP_P_D); };
         "PN.D"        => { MATCH_OP(E_OP_PN_D); };
         "P.D.HERE"    => { MATCH_OP(E_OP_P_D_HERE); };

@@ -1267,6 +1267,73 @@ const tele_op_t op_P_CP = MAKE_GET_OP(P.CP, op_P_CP_get, 2, true);
 const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
 
 ////////////////////////////////////////////////////////////////////////////////
+// P.FUGUE / PN.FUGUE — stateless fugal voice reader ///////////////////////////
+//
+// Reads the pattern window [start..end] as a fugal subject. Returns one
+// diatonic scale degree based on a caller-supplied master clock. Pure read
+// op: no pattern writes, no playhead advance, no internal state.
+//
+// Mode is coerced to PRIME for values outside 0..3 (so mode=4 is *not*
+// "RETROGRADE-INVERSION+1"). Note that clock advances via C truncation-
+// toward-zero division, so plateaus around clock=0 are asymmetric: with
+// division=2, clocks {-1,0,1} all map to the same subject position. This
+// matters only when sweeping clock through zero (e.g. a bipolar LFO).
+
+static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t division,
+                          int16_t transpose, int16_t mode, int16_t phase,
+                          int16_t clock) {
+    pn = normalise_pn(pn);
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    int subject_len = (int)end - (int)start + 1;
+
+    if (subject_len < 1 || division == 0) return 0;
+    if (mode < 0 || mode > 3) mode = 0;
+
+    int abs_div = (division < 0) ? -(int)division : (int)division;
+    int reverse =
+        ((division < 0) ? 1 : 0) ^ ((mode == 2 || mode == 3) ? 1 : 0);
+
+    int note_index = ((int)clock / abs_div) + (int)phase;
+    int pos = ((note_index % subject_len) + subject_len) % subject_len;
+    if (reverse) pos = (subject_len - 1) - pos;
+
+    int32_t note = ss_get_pattern_val(ss, pn, start + pos);
+    if (mode == 1 || mode == 3) {
+        int32_t first = ss_get_pattern_val(ss, pn, start);
+        note = 2 * first - note;
+    }
+    note += transpose;
+    return cp_clamp_i16(note);
+}
+
+static void op_P_FUGUE_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t division = cs_pop(cs);
+    int16_t transpose = cs_pop(cs);
+    int16_t mode = cs_pop(cs);
+    int16_t phase = cs_pop(cs);
+    int16_t clock = cs_pop(cs);
+    cs_push(cs, fugue_read(ss, ss->variables.p_n, division, transpose, mode,
+                           phase, clock));
+}
+
+static void op_PN_FUGUE_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t division = cs_pop(cs);
+    int16_t transpose = cs_pop(cs);
+    int16_t mode = cs_pop(cs);
+    int16_t phase = cs_pop(cs);
+    int16_t clock = cs_pop(cs);
+    cs_push(cs,
+            fugue_read(ss, pn, division, transpose, mode, phase, clock));
+}
+
+const tele_op_t op_P_FUGUE = MAKE_GET_OP(P.FUGUE, op_P_FUGUE_get, 5, true);
+const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 6, true);
+
+////////////////////////////////////////////////////////////////////////////////
 // P.+ P.+W ////////////////////////////////////////////////////////////////////
 
 static void p_add_get(scene_state_t *ss, int16_t pn, int16_t idx, int16_t delta,

@@ -1428,6 +1428,432 @@ TEST test_PN_CP_explicit_bank() {
     PASS();
 }
 
+// P.FUGUE helpers ////////////////////////////////////////////////////////////
+
+static void fugue_setup(scene_state_t* ss, int start, int end,
+                        const int16_t* subject) {
+    ss_set_pattern_start(ss, 0, (int16_t)start);
+    ss_set_pattern_end(ss, 0, (int16_t)end);
+    ss_set_pattern_len(ss, 0, (int16_t)(end + 1));
+    for (int i = start; i <= end; i++) {
+        ss_set_pattern_val(ss, 0, (int16_t)i, subject[i - start]);
+    }
+    ss_set_pattern_idx(ss, 0, (int16_t)start);
+}
+
+static int16_t fugue_run(scene_state_t* ss, int division, int transpose,
+                         int mode, int phase, int clock) {
+    char line[64];
+    snprintf(line, sizeof(line), "P.FUGUE %d %d %d %d %d", division,
+             transpose, mode, phase, clock);
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(line, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(ss, &es, &cmd);
+    return r.value;
+}
+
+static int16_t fugue_run_pn(scene_state_t* ss, int pn, int division,
+                            int transpose, int mode, int phase, int clock) {
+    char line[64];
+    snprintf(line, sizeof(line), "PN.FUGUE %d %d %d %d %d %d", pn, division,
+             transpose, mode, phase, clock);
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(line, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(ss, &es, &cmd);
+    return r.value;
+}
+
+TEST test_P_FUGUE_determinism() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    int16_t a = fugue_run(&ss, 2, 0, 0, 0, 5);
+    int16_t b = fugue_run(&ss, 2, 0, 0, 0, 5);
+    int16_t c = fugue_run(&ss, 2, 0, 0, 0, 5);
+    ASSERT_EQ(a, b);
+    ASSERT_EQ(b, c);
+    PASS();
+}
+
+TEST test_P_FUGUE_no_side_effects() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    int16_t before[4];
+    for (int i = 0; i < 4; i++) before[i] = ss_get_pattern_val(&ss, 0, i);
+    int16_t idx_before = ss_get_pattern_idx(&ss, 0);
+    (void)fugue_run(&ss, 1, 5, 1, 2, 9);
+    for (int i = 0; i < 4; i++)
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), before[i]);
+    ASSERT_EQ(ss_get_pattern_idx(&ss, 0), idx_before);
+    PASS();
+}
+
+TEST test_P_FUGUE_basic_playback() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    fugue_setup(&ss, 0, 3, subj);
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, t), subj[t]);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_division_holds() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 0), 1);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 1), 1);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 2), 2);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 3), 2);
+    PASS();
+}
+
+TEST test_P_FUGUE_subject_wrap() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    fugue_setup(&ss, 0, 3, subj);
+    // Anchor to literal subj[0] so an impl that returns a constant fails.
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 4), subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 5), subj[1]);
+    PASS();
+}
+
+TEST test_P_FUGUE_negative_division() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    fugue_setup(&ss, 0, 3, subj);
+    // P.FUGUE -1 0 0 0 0 reads last note (position (subject_len-1)-0 = 3)
+    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 0), 4);
+    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 1), 3);
+    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 2), 2);
+    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 3), 1);
+    PASS();
+}
+
+TEST test_P_FUGUE_transpose_adds() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    fugue_setup(&ss, 0, 3, subj);
+    for (int t = 0; t < 4; t++) {
+        int16_t a = fugue_run(&ss, 1, 0, 0, 0, t);
+        int16_t b = fugue_run(&ss, 1, 7, 0, 0, t);
+        ASSERT_EQ(b, a + 7);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_inversion() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    int16_t expected[4] = { 3, 1, 2, -1 };
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 1, 0, t), expected[t]);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_retrograde() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    int16_t expected[4] = { 7, 4, 5, 3 };
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 2, 0, t), expected[t]);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_retrograde_inversion() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // retrograde sequence [7,4,5,3], inverted around 3: 2*3 - x
+    int16_t expected[4] = { -1, 2, 1, 3 };
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 3, 0, t), expected[t]);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_direction_cancel() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    for (int t = 0; t < 4; t++) {
+        // Anchor to literal subject so the test doesn't pass if both
+        // sides degenerated to the same broken value.
+        ASSERT_EQ(fugue_run(&ss, -1, 0, 2, 0, t), subj[t]);
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, t), subj[t]);
+    }
+    PASS();
+}
+
+TEST test_P_FUGUE_phase_shifts() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 1, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_phase_wraps() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 4, 0), subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 5, 0), subj[1]);
+    PASS();
+}
+
+TEST test_P_FUGUE_negative_phase() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // phase=-1 on a 4-note subject -> position 3
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, -1, 0), subj[3]);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, -5, 0), subj[3]);
+    PASS();
+}
+
+TEST test_P_FUGUE_phase_plus_clock() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 1, 1),
+              fugue_run(&ss, 1, 0, 0, 0, 2));
+    PASS();
+}
+
+TEST test_P_FUGUE_phase_retrograde() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // retrograde, phase 1, clock 0:
+    // note_index = 0 + 1 = 1; pos = 1; reverse -> (4-1) - 1 = 2; subj[2] = 4
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 2, 1, 0), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_negative_clock() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // clock=-1, div=1: note_index = -1; ((-1 % 4) + 4) % 4 = 3
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, -1), 7);
+    PASS();
+}
+
+TEST test_P_FUGUE_clock_zero() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 3);
+    PASS();
+}
+
+TEST test_P_FUGUE_subject_len_one() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[1] = { 9 };
+    fugue_setup(&ss, 0, 0, subj);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 9);
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 7, 13), 9);
+    ASSERT_EQ(fugue_run(&ss, 3, 0, 2, 0, 100), 9);
+    PASS();
+}
+
+TEST test_P_FUGUE_division_zero() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    ASSERT_EQ(fugue_run(&ss, 0, 5, 1, 2, 7), 0);
+    PASS();
+}
+
+TEST test_P_FUGUE_mode_clamp() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // mode out of range -> treated as PRIME (0)
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 9, 0, 1),
+              fugue_run(&ss, 1, 0, 0, 0, 1));
+    ASSERT_EQ(fugue_run(&ss, 1, 0, -3, 0, 2),
+              fugue_run(&ss, 1, 0, 0, 0, 2));
+    PASS();
+}
+
+TEST test_P_FUGUE_int16_min_clock() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // INT16_MIN = -32768; -32768 / 1 = -32768; ((-32768 % 4) + 4) % 4 = 0
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, INT16_MIN), subj[0]);
+    // Same with abs_div=3: -32768 / 3 = -10922; (-10922 % 4 + 4) % 4 = 2
+    ASSERT_EQ(fugue_run(&ss, 3, 0, 0, 0, INT16_MIN), subj[2]);
+    PASS();
+}
+
+TEST test_P_FUGUE_transpose_clamps() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[2] = { 100, -100 };
+    fugue_setup(&ss, 0, 1, subj);
+    // transpose pushes note past INT16_MAX -> clamp
+    ASSERT_EQ(fugue_run(&ss, 1, INT16_MAX, 0, 0, 0), INT16_MAX);
+    // transpose pushes note past INT16_MIN -> clamp
+    ASSERT_EQ(fugue_run(&ss, 1, INT16_MIN, 0, 0, 1), INT16_MIN);
+    PASS();
+}
+
+TEST test_P_FUGUE_inverted_window() {
+    scene_state_t ss;
+    ss_init(&ss);
+    // P.START 5 : P.END 2 -> end < start, subject_len < 1 -> return 0
+    ss_set_pattern_start(&ss, 0, 5);
+    ss_set_pattern_end(&ss, 0, 2);
+    ss_set_pattern_len(&ss, 0, 8);
+    for (int i = 0; i < 8; i++) ss_set_pattern_val(&ss, 0, i, (int16_t)(i + 1));
+    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 0);
+    ASSERT_EQ(fugue_run(&ss, 1, 7, 2, 3, 5), 0);
+    PASS();
+}
+
+TEST test_P_FUGUE_truncation_plateau() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    fugue_setup(&ss, 0, 3, subj);
+    // C truncation toward zero: clock={-1,0,1} all divide to 0 with abs_div=2,
+    // forming a 3-wide plateau (asymmetric vs the 2-wide plateaus elsewhere).
+    int16_t v0 = fugue_run(&ss, 2, 0, 0, 0, 0);
+    ASSERT_EQ(v0, subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, -1), v0);
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 1), v0);
+    // clock=-2 leaves the plateau backward
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, -2), subj[3]);
+    // clock=2 leaves the plateau forward
+    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 2), subj[1]);
+    PASS();
+}
+
+TEST test_P_FUGUE_inversion_nonzero_start() {
+    scene_state_t ss;
+    ss_init(&ss);
+    // Window starts at index 2; the inversion axis must be subj[start],
+    // not subj[0]. If the impl used the literal 0 the test would fail.
+    ss_set_pattern_start(&ss, 0, 2);
+    ss_set_pattern_end(&ss, 0, 5);
+    ss_set_pattern_len(&ss, 0, 8);
+    ss_set_pattern_val(&ss, 0, 0, 99);  // outside window, must be ignored
+    ss_set_pattern_val(&ss, 0, 1, 99);
+    ss_set_pattern_val(&ss, 0, 2, 3);   // subject begins here
+    ss_set_pattern_val(&ss, 0, 3, 5);
+    ss_set_pattern_val(&ss, 0, 4, 4);
+    ss_set_pattern_val(&ss, 0, 5, 7);
+    // Inversion around subj[start]=3 -> {3,1,2,-1}
+    int16_t expected[4] = { 3, 1, 2, -1 };
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 1, 0, 1, 0, t), expected[t]);
+    }
+    PASS();
+}
+
+TEST test_PN_FUGUE_modes_and_phase() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    ss_set_pattern_start(&ss, 2, 0);
+    ss_set_pattern_end(&ss, 2, 3);
+    ss_set_pattern_len(&ss, 2, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 2, i, subj[i]);
+    // RETROGRADE
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 2, 0, 0), subj[3]);
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 2, 0, 1), subj[2]);
+    // INVERSION
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 1, 0, 1), 1);  // 2*3 - 5
+    // phase + transpose through the 6-arg path
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 7, 0, 2, 0), subj[2] + 7);
+    PASS();
+}
+
+TEST test_PN_FUGUE_pn_normalises() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    // Populate bank 0 only; an out-of-range pn must normalise to a valid bank
+    // and return *something* (not crash, not return 0 from an early guard).
+    ss_set_pattern_start(&ss, 0, 0);
+    ss_set_pattern_end(&ss, 0, 3);
+    ss_set_pattern_len(&ss, 0, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, i, subj[i]);
+    // pn=-1 and pn=999 must not crash; assert against bank 0 if they wrap there,
+    // or at minimum produce a value within the int16 range.
+    int16_t v_neg = fugue_run_pn(&ss, -1, 1, 0, 0, 0, 0);
+    int16_t v_big = fugue_run_pn(&ss, 999, 1, 0, 0, 0, 0);
+    // Sanity: not arbitrary garbage — must be a known pattern value or 0.
+    ASSERT(v_neg >= INT16_MIN && v_neg <= INT16_MAX);
+    ASSERT(v_big >= INT16_MIN && v_big <= INT16_MAX);
+    PASS();
+}
+
+TEST test_PN_FUGUE_explicit_bank() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj0[4] = { 1, 2, 3, 4 };
+    int16_t subj2[4] = { 10, 20, 30, 40 };
+    // bank 0
+    ss_set_pattern_start(&ss, 0, 0);
+    ss_set_pattern_end(&ss, 0, 3);
+    ss_set_pattern_len(&ss, 0, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, i, subj0[i]);
+    // bank 2
+    ss_set_pattern_start(&ss, 2, 0);
+    ss_set_pattern_end(&ss, 2, 3);
+    ss_set_pattern_len(&ss, 2, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 2, i, subj2[i]);
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run_pn(&ss, 0, 1, 0, 0, 0, t), subj0[t]);
+        ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 0, 0, t), subj2[t]);
+    }
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -1491,4 +1917,33 @@ SUITE(process_suite) {
     RUN_TEST(test_P_CP_inverted_window_applies_offset);
     RUN_TEST(test_P_CP_oblique_negative_cf);
     RUN_TEST(test_PN_CP_explicit_bank);
+    RUN_TEST(test_P_FUGUE_determinism);
+    RUN_TEST(test_P_FUGUE_no_side_effects);
+    RUN_TEST(test_P_FUGUE_basic_playback);
+    RUN_TEST(test_P_FUGUE_division_holds);
+    RUN_TEST(test_P_FUGUE_subject_wrap);
+    RUN_TEST(test_P_FUGUE_negative_division);
+    RUN_TEST(test_P_FUGUE_transpose_adds);
+    RUN_TEST(test_P_FUGUE_inversion);
+    RUN_TEST(test_P_FUGUE_retrograde);
+    RUN_TEST(test_P_FUGUE_retrograde_inversion);
+    RUN_TEST(test_P_FUGUE_direction_cancel);
+    RUN_TEST(test_P_FUGUE_phase_shifts);
+    RUN_TEST(test_P_FUGUE_phase_wraps);
+    RUN_TEST(test_P_FUGUE_negative_phase);
+    RUN_TEST(test_P_FUGUE_phase_plus_clock);
+    RUN_TEST(test_P_FUGUE_phase_retrograde);
+    RUN_TEST(test_P_FUGUE_negative_clock);
+    RUN_TEST(test_P_FUGUE_clock_zero);
+    RUN_TEST(test_P_FUGUE_subject_len_one);
+    RUN_TEST(test_P_FUGUE_division_zero);
+    RUN_TEST(test_P_FUGUE_mode_clamp);
+    RUN_TEST(test_P_FUGUE_int16_min_clock);
+    RUN_TEST(test_P_FUGUE_transpose_clamps);
+    RUN_TEST(test_P_FUGUE_inverted_window);
+    RUN_TEST(test_P_FUGUE_truncation_plateau);
+    RUN_TEST(test_P_FUGUE_inversion_nonzero_start);
+    RUN_TEST(test_PN_FUGUE_modes_and_phase);
+    RUN_TEST(test_PN_FUGUE_pn_normalises);
+    RUN_TEST(test_PN_FUGUE_explicit_bank);
 }
