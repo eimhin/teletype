@@ -885,6 +885,275 @@ TEST test_P_MODE_roundtrip_via_p_i() {
     PASS();
 }
 
+// Parse & execute each line, discarding the stack result, so tests can inspect
+// pattern state directly via ss_get_pattern_val. Fails the calling TEST if any
+// line fails to parse or validate (otherwise an op rename or arity change
+// would silently leave the pattern at its default and several tests would
+// pass against all-zero state).
+TEST motif_run(scene_state_t* ss, size_t n, char* lines[]) {
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    for (size_t i = 0; i < n; i++) {
+        tele_command_t cmd;
+        char error_msg[TELE_ERROR_MSG_LENGTH];
+        if (parse(lines[i], &cmd, error_msg) != E_OK) FAILm(lines[i]);
+        if (validate(&cmd, error_msg) != E_OK) FAILm(lines[i]);
+        process_command(ss, &es, &cmd);
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_determinism() {
+    scene_state_t ss1, ss2;
+    ss_init(&ss1);
+    ss_init(&ss2);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 42" };
+    CHECK_CALL(motif_run(&ss1, 3, setup));
+    CHECK_CALL(motif_run(&ss2, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss1, 1, fire));
+    CHECK_CALL(motif_run(&ss2, 1, fire));
+    for (int i = 0; i <= 15; i++) {
+        ASSERT_EQ(ss_get_pattern_val(&ss1, 0, i),
+                  ss_get_pattern_val(&ss2, 0, i));
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_repetition() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 7" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // length=4, mode=EXACT, transposition=0: window is 4 repetitions of the
+    // same 4-value motif.
+    for (int i = 4; i <= 15; i++) {
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, i),
+                  ss_get_pattern_val(&ss, 0, i % 4));
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_transposition() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 99" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 0 2" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // Statement s adds s*2 to each base motif value.
+    for (int s = 1; s < 4; s++) {
+        for (int n = 0; n < 4; n++) {
+            int16_t base = ss_get_pattern_val(&ss, 0, n);
+            int16_t got = ss_get_pattern_val(&ss, 0, s * 4 + n);
+            ASSERT_EQ(got, base + s * 2);
+        }
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_inversion() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 11" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 1 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // Statement 0 values are (1 + offset[n]). Statement 1 (INVERT) values are
+    // (1 - offset[n]). So pattern[n] + pattern[4+n] == 2.
+    for (int n = 0; n < 4; n++) {
+        int16_t a = ss_get_pattern_val(&ss, 0, n);
+        int16_t b = ss_get_pattern_val(&ss, 0, 4 + n);
+        ASSERT_EQ(a + b, 2);
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_retrograde() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 13" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 2 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // Statement 1 (RETROGRADE) reverses the motif.
+    for (int n = 0; n < 4; n++) {
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, 4 + n),
+                  ss_get_pattern_val(&ss, 0, 3 - n));
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_alternate() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 19" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 3 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // ALTERNATE: even statements EXACT, odd statements INVERT.
+    for (int n = 0; n < 4; n++) {
+        int16_t s0 = ss_get_pattern_val(&ss, 0, n);
+        int16_t s1 = ss_get_pattern_val(&ss, 0, 4 + n);
+        int16_t s2 = ss_get_pattern_val(&ss, 0, 8 + n);
+        int16_t s3 = ss_get_pattern_val(&ss, 0, 12 + n);
+        ASSERT_EQ(s2, s0);      // statement 2 == statement 0 (EXACT)
+        ASSERT_EQ(s0 + s1, 2);  // statement 1 inverted around degree 1
+        ASSERT_EQ(s3, s1);      // statement 3 == statement 1 (INVERT)
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_ornament() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 23" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 4 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // ORNAMENT: statement 1 == statement 0 in three positions, differs by
+    // exactly +-1 in one position.
+    int diff_count = 0;
+    int total_abs_diff = 0;
+    for (int n = 0; n < 4; n++) {
+        int16_t s0 = ss_get_pattern_val(&ss, 0, n);
+        int16_t s1 = ss_get_pattern_val(&ss, 0, 4 + n);
+        int16_t d = s1 - s0;
+        if (d != 0) {
+            diff_count++;
+            total_abs_diff += (d < 0) ? -d : d;
+        }
+    }
+    ASSERT_EQ(diff_count, 1);
+    ASSERT_EQ(total_abs_diff, 1);
+    PASS();
+}
+
+TEST test_P_MOTIF_expand() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 29" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 6 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // EXPAND: statement 1 doubles offsets from anchor degree 1.
+    // pattern[4+n] - 1 == 2 * (pattern[n] - 1).
+    for (int n = 0; n < 4; n++) {
+        int16_t s0 = ss_get_pattern_val(&ss, 0, n);
+        int16_t s1 = ss_get_pattern_val(&ss, 0, 4 + n);
+        ASSERT_EQ(s1 - 1, 2 * (s0 - 1));
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_compress() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 31" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 5 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // COMPRESS: statement 1 halves offsets (C truncates toward zero).
+    // pattern[4+n] - 1 == (pattern[n] - 1) / 2.
+    for (int n = 0; n < 4; n++) {
+        int16_t s0 = ss_get_pattern_val(&ss, 0, n);
+        int16_t s1 = ss_get_pattern_val(&ss, 0, 4 + n);
+        ASSERT_EQ(s1 - 1, (s0 - 1) / 2);
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_rotate() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 37" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 7 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // ROTATE: statement s is the base motif cyclically rotated by s positions.
+    // pattern[s*4 + n] == pattern[(n + s) % 4].
+    for (int s = 1; s < 4; s++) {
+        for (int n = 0; n < 4; n++) {
+            ASSERT_EQ(ss_get_pattern_val(&ss, 0, s * 4 + n),
+                      ss_get_pattern_val(&ss, 0, (n + s) % 4));
+        }
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_partial_trailing() {
+    // Window length 10, motif length 4: full statements at 0..3 and 4..7,
+    // then a partial statement 8..9 carrying the first 2 notes of the next
+    // (EXACT) variation. With mode=0 transpose=0 this means pattern[8]==P[0]
+    // and pattern[9]==P[1].
+    scene_state_t ss;
+    ss_init(&ss);
+    char* setup[3] = { "P.START 0", "P.END 9", "P.SEED 5" };
+    CHECK_CALL(motif_run(&ss, 3, setup));
+    char* fire[1] = { "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    ASSERT_EQ(ss_get_pattern_val(&ss, 0, 8), ss_get_pattern_val(&ss, 0, 0));
+    ASSERT_EQ(ss_get_pattern_val(&ss, 0, 9), ss_get_pattern_val(&ss, 0, 1));
+    PASS();
+}
+
+TEST test_P_MOTIF_length_clamping() {
+    scene_state_t a, b, c, d;
+    ss_init(&a);
+    ss_init(&b);
+    ss_init(&c);
+    ss_init(&d);
+    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 17" };
+    CHECK_CALL(motif_run(&a, 3, setup));
+    CHECK_CALL(motif_run(&b, 3, setup));
+    CHECK_CALL(motif_run(&c, 3, setup));
+    CHECK_CALL(motif_run(&d, 3, setup));
+    char* lo_clamp[1] = { "P.MOTIF 1 0 0" };
+    char* lo_real[1] = { "P.MOTIF 2 0 0" };
+    char* hi_clamp[1] = { "P.MOTIF 99 0 0" };
+    char* hi_real[1] = { "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&a, 1, lo_clamp));
+    CHECK_CALL(motif_run(&b, 1, lo_real));
+    CHECK_CALL(motif_run(&c, 1, hi_clamp));
+    CHECK_CALL(motif_run(&d, 1, hi_real));
+    for (int i = 0; i <= 15; i++) {
+        ASSERT_EQ(ss_get_pattern_val(&a, 0, i), ss_get_pattern_val(&b, 0, i));
+        ASSERT_EQ(ss_get_pattern_val(&c, 0, i), ss_get_pattern_val(&d, 0, i));
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_window_respect() {
+    scene_state_t ss;
+    ss_init(&ss);
+    // Seed pattern values outside the window with a sentinel.
+    char* prep[8] = { "P.START 0", "P.END 3", "P 4 999",  "P 5 999",
+                      "P 6 999",   "P 7 999", "P.SEED 1", "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss, 8, prep));
+    for (int i = 4; i <= 7; i++) {
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), 999);
+    }
+    PASS();
+}
+
+TEST test_P_MOTIF_window_length_1() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* prep[4] = { "P.START 0", "P.END 0", "P 1 777", "P.SEED 3" };
+    CHECK_CALL(motif_run(&ss, 4, prep));
+    char* fire[1] = { "P.MOTIF 2 0 0" };
+    CHECK_CALL(motif_run(&ss, 1, fire));
+    // First note of motif is always degree 1 (untransposed reference).
+    ASSERT_EQ(ss_get_pattern_val(&ss, 0, 0), 1);
+    // Outside the window is preserved.
+    ASSERT_EQ(ss_get_pattern_val(&ss, 0, 1), 777);
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -920,4 +1189,18 @@ SUITE(process_suite) {
     RUN_TEST(test_P_MODE_jump);
     RUN_TEST(test_P_MODE_random_in_range);
     RUN_TEST(test_P_MODE_roundtrip_via_p_i);
+    RUN_TEST(test_P_MOTIF_determinism);
+    RUN_TEST(test_P_MOTIF_repetition);
+    RUN_TEST(test_P_MOTIF_transposition);
+    RUN_TEST(test_P_MOTIF_inversion);
+    RUN_TEST(test_P_MOTIF_retrograde);
+    RUN_TEST(test_P_MOTIF_alternate);
+    RUN_TEST(test_P_MOTIF_ornament);
+    RUN_TEST(test_P_MOTIF_expand);
+    RUN_TEST(test_P_MOTIF_compress);
+    RUN_TEST(test_P_MOTIF_rotate);
+    RUN_TEST(test_P_MOTIF_partial_trailing);
+    RUN_TEST(test_P_MOTIF_length_clamping);
+    RUN_TEST(test_P_MOTIF_window_respect);
+    RUN_TEST(test_P_MOTIF_window_length_1);
 }

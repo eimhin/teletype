@@ -936,6 +936,143 @@ const tele_op_t op_P_RND = MAKE_GET_OP(P.RND, op_P_RND_get, 0, true);
 const tele_op_t op_PN_RND = MAKE_GET_OP(PN.RND, op_PN_RND_get, 1, true);
 
 ////////////////////////////////////////////////////////////////////////////////
+// P.MOTIF /////////////////////////////////////////////////////////////////////
+
+// Weighted step generator for motif construction. Returns a signed scale-degree
+// step in [-3, +3]. Magnitudes are drawn at weights 50/25/25 for 1/2/3
+// (collapsing the upper half of the wider melody distribution into 3, since
+// short motifs feel more coherent with small internal intervals). After a leap
+// (|prev_step| >= 3) the next step has magnitude 1-2 and opposite direction.
+static int16_t motif_step(random_state_t *r, int16_t prev_step) {
+    if (prev_step >= 3 || prev_step <= -3) {
+        int16_t mag = 1 + (int16_t)(random_next(r) % 2);
+        int16_t sign = (prev_step > 0) ? -1 : 1;
+        return sign * mag;
+    }
+
+    uint32_t roll = random_next(r) % 100;
+    int16_t mag;
+    if (roll < 50)
+        mag = 1;
+    else if (roll < 75)
+        mag = 2;
+    else
+        mag = 3;
+
+    int16_t sign = (random_next(r) & 1) ? 1 : -1;
+    return sign * mag;
+}
+
+// Fill the working pattern's [start..end] window with a motif and its
+// variations. Output values are diatonic scale degrees (1..7 = one octave, 0
+// and negatives below). length: 2-4 (clamped). variation: 0-7 (wrapped).
+// transposition: signed degree shift applied to each successive statement.
+static void p_motif(scene_state_t *ss, int16_t pn, int16_t length,
+                    int16_t variation, int16_t transposition) {
+    pn = normalise_pn(pn);
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    if (end < start) return;
+
+    if (length < 2) length = 2;
+    if (length > 4) length = 4;
+    variation = ((variation % 8) + 8) % 8;
+
+    random_state_t *r = &ss->rand_states.s.pattern.rand;
+
+    int16_t motif[4];
+    motif[0] = 0;
+    int16_t prev_step = 0;
+    for (int16_t n = 1; n < length; n++) {
+        int16_t step = motif_step(r, prev_step);
+        motif[n] = motif[n - 1] + step;
+        prev_step = step;
+    }
+
+    int16_t L = end - start + 1;
+    int16_t num_full = L / length;
+    int16_t leftover = L % length;
+    int16_t total_statements = num_full + (leftover > 0 ? 1 : 0);
+
+    int16_t out[4];
+    for (int16_t s = 0; s < total_statements; s++) {
+        int32_t tpose = (int32_t)s * (int32_t)transposition;
+        int16_t mode = (s == 0) ? 0 : variation;
+
+        switch (mode) {
+            case 1:  // INVERT
+                for (int16_t n = 0; n < length; n++) out[n] = -motif[n];
+                break;
+            case 2:  // RETROGRADE
+                for (int16_t n = 0; n < length; n++)
+                    out[n] = motif[length - 1 - n];
+                break;
+            case 3:  // ALTERNATE
+                if (s & 1) {
+                    for (int16_t n = 0; n < length; n++) out[n] = -motif[n];
+                }
+                else {
+                    for (int16_t n = 0; n < length; n++) out[n] = motif[n];
+                }
+                break;
+            case 4: {  // ORNAMENT
+                for (int16_t n = 0; n < length; n++) out[n] = motif[n];
+                int16_t nudge_pos =
+                    (int16_t)(random_next(r) % (uint32_t)length);
+                int16_t nudge_dir = (random_next(r) & 1) ? 1 : -1;
+                out[nudge_pos] += nudge_dir;
+                break;
+            }
+            case 5:  // COMPRESS
+                for (int16_t n = 0; n < length; n++) out[n] = motif[n] / 2;
+                break;
+            case 6:  // EXPAND
+                for (int16_t n = 0; n < length; n++) out[n] = motif[n] * 2;
+                break;
+            case 7:  // ROTATE
+                for (int16_t n = 0; n < length; n++)
+                    out[n] = motif[(n + s) % length];
+                break;
+            case 0:  // EXACT
+            default:
+                for (int16_t n = 0; n < length; n++) out[n] = motif[n];
+                break;
+        }
+
+        for (int16_t n = 0; n < length; n++) {
+            int16_t pos = (int16_t)(s * length + n);
+            if (pos >= L) break;
+            int32_t value = (int32_t)1 + tpose + (int32_t)out[n];
+            if (value > INT16_MAX) value = INT16_MAX;
+            if (value < INT16_MIN) value = INT16_MIN;
+            ss_set_pattern_val(ss, pn, start + pos, (int16_t)value);
+        }
+    }
+
+    tele_pattern_updated();
+}
+
+static void op_P_MOTIF_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t length = cs_pop(cs);
+    int16_t variation = cs_pop(cs);
+    int16_t transposition = cs_pop(cs);
+    p_motif(ss, ss->variables.p_n, length, variation, transposition);
+}
+
+static void op_PN_MOTIF_get(const void *NOTUSED(data), scene_state_t *ss,
+                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t length = cs_pop(cs);
+    int16_t variation = cs_pop(cs);
+    int16_t transposition = cs_pop(cs);
+    p_motif(ss, pn, length, variation, transposition);
+}
+
+const tele_op_t op_P_MOTIF = MAKE_GET_OP(P.MOTIF, op_P_MOTIF_get, 3, false);
+const tele_op_t op_PN_MOTIF = MAKE_GET_OP(PN.MOTIF, op_PN_MOTIF_get, 4, false);
+
+////////////////////////////////////////////////////////////////////////////////
 // P.+ P.+W ////////////////////////////////////////////////////////////////////
 
 static void p_add_get(scene_state_t *ss, int16_t pn, int16_t idx, int16_t delta,
