@@ -53,6 +53,7 @@ extern const tele_op_t op_P_CP;
 extern const tele_op_t op_PN_CP;
 extern const tele_op_t op_P_FUGUE;
 extern const tele_op_t op_PN_FUGUE;
+void fugue_voice_state_reset(void);
 extern const tele_op_t op_P_ADD;
 extern const tele_op_t op_PN_ADD;
 extern const tele_op_t op_P_ADDW;

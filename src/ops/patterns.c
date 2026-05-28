@@ -1267,27 +1267,58 @@ const tele_op_t op_P_CP = MAKE_GET_OP(P.CP, op_P_CP_get, 2, true);
 const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
 
 ////////////////////////////////////////////////////////////////////////////////
-// P.FUGUE / PN.FUGUE — stateless fugal voice reader ///////////////////////////
+// P.FUGUE / PN.FUGUE — fugal voice reader //////////////////////////////////////
 //
 // Reads the pattern window [start..end] as a fugal subject. Returns one
-// diatonic scale degree based on a caller-supplied master clock. Pure read
-// op: no pattern writes, no playhead advance, no internal state.
+// diatonic scale degree based on a caller-supplied master clock.
 //
 // Mode is coerced to PRIME for values outside 0..3 (so mode=4 is *not*
 // "RETROGRADE-INVERSION+1"). Note that clock advances via C truncation-
 // toward-zero division, so plateaus around clock=0 are asymmetric: with
 // division=2, clocks {-1,0,1} all map to the same subject position. This
 // matters only when sweeping clock through zero (e.g. a bipolar LFO).
+//
+// The first arg `voice` opts into clash avoidance. voice=0 (the default for
+// scripts that don't care) is fully stateless and identical to v1 behaviour.
+// voice=1..4 records its final value in a small per-bank state table; voices
+// 2..4 inspect lower-numbered voices that recorded a value at the *same
+// clock* (any other clock value is treated as stale and ignored) and adjust
+// away from 2nd/7th intervals (|diff| mod 7 ∈ {1, 6}). Adjustment is
+// bidirectional — push up when above the other voice, down when below —
+// which lands on the stronger consonance (3rd or octave) and avoids the
+// upward drift "always +1" would cause. Unisons and octaves are allowed.
+// Voices are expected to be called in numerical order within a tick; calling
+// out of order produces unreliable avoidance but is not catastrophic. The
+// state table persists across scene loads but is harmless thanks to the
+// staleness check.
 
-static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t division,
-                          int16_t transpose, int16_t mode, int16_t phase,
-                          int16_t clock) {
-    pn = normalise_pn(pn);
+#define FUGUE_VOICE_COUNT 5 /* slots 0..4; slot 0 unused (voices are 1..4) */
+
+typedef struct {
+    int32_t last_clock;
+    int16_t note;
+    uint8_t valid;
+} fugue_voice_slot_t;
+
+static fugue_voice_slot_t fugue_voice_state[PATTERN_COUNT][FUGUE_VOICE_COUNT];
+
+void fugue_voice_state_reset(void) {
+    for (size_t b = 0; b < PATTERN_COUNT; b++) {
+        for (size_t v = 0; v < FUGUE_VOICE_COUNT; v++) {
+            fugue_voice_state[b][v].last_clock = 0;
+            fugue_voice_state[b][v].note = 0;
+            fugue_voice_state[b][v].valid = 0;
+        }
+    }
+}
+
+static int16_t fugue_candidate(scene_state_t *ss, int16_t pn, int16_t division,
+                               int16_t transpose, int16_t mode, int16_t phase,
+                               int16_t clock) {
     int16_t start = ss_get_pattern_start(ss, pn);
     int16_t end = ss_get_pattern_end(ss, pn);
     int subject_len = (int)end - (int)start + 1;
 
-    if (subject_len < 1 || division == 0) return 0;
     if (mode < 0 || mode > 3) mode = 0;
 
     int abs_div = (division < 0) ? -(int)division : (int)division;
@@ -1307,31 +1338,78 @@ static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t division,
     return cp_clamp_i16(note);
 }
 
+static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t voice,
+                          int16_t division, int16_t transpose, int16_t mode,
+                          int16_t phase, int16_t clock) {
+    pn = normalise_pn(pn);
+
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    if (((int)end - (int)start + 1) < 1 || division == 0) return 0;
+
+    int16_t candidate =
+        fugue_candidate(ss, pn, division, transpose, mode, phase, clock);
+
+    if (voice < 0) voice = 0;
+    if (voice > 4) voice = 4;
+
+    if (voice == 0) return candidate;
+
+    if (voice >= 2) {
+        int safety = 8;
+        int adjusted = 1;
+        while (adjusted && safety-- > 0) {
+            adjusted = 0;
+            for (int v = 1; v < voice; v++) {
+                fugue_voice_slot_t *slot = &fugue_voice_state[pn][v];
+                if (!slot->valid || slot->last_clock != (int32_t)clock)
+                    continue;
+                int diff = (int)candidate - (int)slot->note;
+                if (diff == 0) continue;
+                int abs_mod7 = (diff > 0 ? diff : -diff) % 7;
+                if (abs_mod7 == 1 || abs_mod7 == 6) {
+                    candidate = cp_clamp_i16((int32_t)candidate +
+                                             (diff > 0 ? 1 : -1));
+                    adjusted = 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    fugue_voice_state[pn][voice].note = candidate;
+    fugue_voice_state[pn][voice].last_clock = (int32_t)clock;
+    fugue_voice_state[pn][voice].valid = 1;
+    return candidate;
+}
+
 static void op_P_FUGUE_get(const void *NOTUSED(data), scene_state_t *ss,
                            exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t voice = cs_pop(cs);
     int16_t division = cs_pop(cs);
     int16_t transpose = cs_pop(cs);
     int16_t mode = cs_pop(cs);
     int16_t phase = cs_pop(cs);
     int16_t clock = cs_pop(cs);
-    cs_push(cs, fugue_read(ss, ss->variables.p_n, division, transpose, mode,
-                           phase, clock));
+    cs_push(cs, fugue_read(ss, ss->variables.p_n, voice, division, transpose,
+                           mode, phase, clock));
 }
 
 static void op_PN_FUGUE_get(const void *NOTUSED(data), scene_state_t *ss,
                             exec_state_t *NOTUSED(es), command_state_t *cs) {
     int16_t pn = cs_pop(cs);
+    int16_t voice = cs_pop(cs);
     int16_t division = cs_pop(cs);
     int16_t transpose = cs_pop(cs);
     int16_t mode = cs_pop(cs);
     int16_t phase = cs_pop(cs);
     int16_t clock = cs_pop(cs);
-    cs_push(cs,
-            fugue_read(ss, pn, division, transpose, mode, phase, clock));
+    cs_push(cs, fugue_read(ss, pn, voice, division, transpose, mode, phase,
+                           clock));
 }
 
-const tele_op_t op_P_FUGUE = MAKE_GET_OP(P.FUGUE, op_P_FUGUE_get, 5, true);
-const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 6, true);
+const tele_op_t op_P_FUGUE = MAKE_GET_OP(P.FUGUE, op_P_FUGUE_get, 6, true);
+const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 7, true);
 
 ////////////////////////////////////////////////////////////////////////////////
 // P.+ P.+W ////////////////////////////////////////////////////////////////////

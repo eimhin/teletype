@@ -5,6 +5,7 @@
 #include <unistd.h>  // ssize_t
 
 #include "greatest/greatest.h"
+#include "ops/patterns.h"
 #include "teletype.h"
 // runs multiple lines of commands and then asserts that the final answer is
 // correct (allows contiuation of state)
@@ -1441,10 +1442,10 @@ static void fugue_setup(scene_state_t* ss, int start, int end,
     ss_set_pattern_idx(ss, 0, (int16_t)start);
 }
 
-static int16_t fugue_run(scene_state_t* ss, int division, int transpose,
-                         int mode, int phase, int clock) {
+static int16_t fugue_run(scene_state_t* ss, int voice, int division,
+                         int transpose, int mode, int phase, int clock) {
     char line[64];
-    snprintf(line, sizeof(line), "P.FUGUE %d %d %d %d %d", division,
+    snprintf(line, sizeof(line), "P.FUGUE %d %d %d %d %d %d", voice, division,
              transpose, mode, phase, clock);
     exec_state_t es;
     es_init(&es);
@@ -1458,11 +1459,11 @@ static int16_t fugue_run(scene_state_t* ss, int division, int transpose,
     return r.value;
 }
 
-static int16_t fugue_run_pn(scene_state_t* ss, int pn, int division,
+static int16_t fugue_run_pn(scene_state_t* ss, int pn, int voice, int division,
                             int transpose, int mode, int phase, int clock) {
     char line[64];
-    snprintf(line, sizeof(line), "PN.FUGUE %d %d %d %d %d %d", pn, division,
-             transpose, mode, phase, clock);
+    snprintf(line, sizeof(line), "PN.FUGUE %d %d %d %d %d %d %d", pn, voice,
+             division, transpose, mode, phase, clock);
     exec_state_t es;
     es_init(&es);
     es_push(&es);
@@ -1480,9 +1481,9 @@ TEST test_P_FUGUE_determinism() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    int16_t a = fugue_run(&ss, 2, 0, 0, 0, 5);
-    int16_t b = fugue_run(&ss, 2, 0, 0, 0, 5);
-    int16_t c = fugue_run(&ss, 2, 0, 0, 0, 5);
+    int16_t a = fugue_run(&ss, 0, 2, 0, 0, 0, 5);
+    int16_t b = fugue_run(&ss, 0, 2, 0, 0, 0, 5);
+    int16_t c = fugue_run(&ss, 0, 2, 0, 0, 0, 5);
     ASSERT_EQ(a, b);
     ASSERT_EQ(b, c);
     PASS();
@@ -1496,7 +1497,7 @@ TEST test_P_FUGUE_no_side_effects() {
     int16_t before[4];
     for (int i = 0; i < 4; i++) before[i] = ss_get_pattern_val(&ss, 0, i);
     int16_t idx_before = ss_get_pattern_idx(&ss, 0);
-    (void)fugue_run(&ss, 1, 5, 1, 2, 9);
+    (void)fugue_run(&ss, 0, 1, 5, 1, 2, 9);
     for (int i = 0; i < 4; i++)
         ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), before[i]);
     ASSERT_EQ(ss_get_pattern_idx(&ss, 0), idx_before);
@@ -1509,7 +1510,7 @@ TEST test_P_FUGUE_basic_playback() {
     int16_t subj[4] = { 1, 2, 3, 4 };
     fugue_setup(&ss, 0, 3, subj);
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, t), subj[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, t), subj[t]);
     }
     PASS();
 }
@@ -1519,10 +1520,10 @@ TEST test_P_FUGUE_division_holds() {
     ss_init(&ss);
     int16_t subj[4] = { 1, 2, 3, 4 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 0), 1);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 1), 1);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 2), 2);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 3), 2);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 0), 1);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 1), 1);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 2), 2);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 3), 2);
     PASS();
 }
 
@@ -1532,8 +1533,8 @@ TEST test_P_FUGUE_subject_wrap() {
     int16_t subj[4] = { 1, 2, 3, 4 };
     fugue_setup(&ss, 0, 3, subj);
     // Anchor to literal subj[0] so an impl that returns a constant fails.
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 4), subj[0]);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 5), subj[1]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 4), subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 5), subj[1]);
     PASS();
 }
 
@@ -1543,10 +1544,10 @@ TEST test_P_FUGUE_negative_division() {
     int16_t subj[4] = { 1, 2, 3, 4 };
     fugue_setup(&ss, 0, 3, subj);
     // P.FUGUE -1 0 0 0 0 reads last note (position (subject_len-1)-0 = 3)
-    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 0), 4);
-    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 1), 3);
-    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 2), 2);
-    ASSERT_EQ(fugue_run(&ss, -1, 0, 0, 0, 3), 1);
+    ASSERT_EQ(fugue_run(&ss, 0, -1, 0, 0, 0, 0), 4);
+    ASSERT_EQ(fugue_run(&ss, 0, -1, 0, 0, 0, 1), 3);
+    ASSERT_EQ(fugue_run(&ss, 0, -1, 0, 0, 0, 2), 2);
+    ASSERT_EQ(fugue_run(&ss, 0, -1, 0, 0, 0, 3), 1);
     PASS();
 }
 
@@ -1556,8 +1557,8 @@ TEST test_P_FUGUE_transpose_adds() {
     int16_t subj[4] = { 1, 2, 3, 4 };
     fugue_setup(&ss, 0, 3, subj);
     for (int t = 0; t < 4; t++) {
-        int16_t a = fugue_run(&ss, 1, 0, 0, 0, t);
-        int16_t b = fugue_run(&ss, 1, 7, 0, 0, t);
+        int16_t a = fugue_run(&ss, 0, 1, 0, 0, 0, t);
+        int16_t b = fugue_run(&ss, 0, 1, 7, 0, 0, t);
         ASSERT_EQ(b, a + 7);
     }
     PASS();
@@ -1570,7 +1571,7 @@ TEST test_P_FUGUE_inversion() {
     fugue_setup(&ss, 0, 3, subj);
     int16_t expected[4] = { 3, 1, 2, -1 };
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 1, 0, t), expected[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 1, 0, t), expected[t]);
     }
     PASS();
 }
@@ -1582,7 +1583,7 @@ TEST test_P_FUGUE_retrograde() {
     fugue_setup(&ss, 0, 3, subj);
     int16_t expected[4] = { 7, 4, 5, 3 };
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 2, 0, t), expected[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 2, 0, t), expected[t]);
     }
     PASS();
 }
@@ -1595,7 +1596,7 @@ TEST test_P_FUGUE_retrograde_inversion() {
     // retrograde sequence [7,4,5,3], inverted around 3: 2*3 - x
     int16_t expected[4] = { -1, 2, 1, 3 };
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 3, 0, t), expected[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 3, 0, t), expected[t]);
     }
     PASS();
 }
@@ -1608,8 +1609,8 @@ TEST test_P_FUGUE_direction_cancel() {
     for (int t = 0; t < 4; t++) {
         // Anchor to literal subject so the test doesn't pass if both
         // sides degenerated to the same broken value.
-        ASSERT_EQ(fugue_run(&ss, -1, 0, 2, 0, t), subj[t]);
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, t), subj[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, -1, 0, 2, 0, t), subj[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, t), subj[t]);
     }
     PASS();
 }
@@ -1619,7 +1620,7 @@ TEST test_P_FUGUE_phase_shifts() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 1, 0), 5);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 1, 0), 5);
     PASS();
 }
 
@@ -1628,8 +1629,8 @@ TEST test_P_FUGUE_phase_wraps() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 4, 0), subj[0]);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 5, 0), subj[1]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 4, 0), subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 5, 0), subj[1]);
     PASS();
 }
 
@@ -1639,8 +1640,8 @@ TEST test_P_FUGUE_negative_phase() {
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
     // phase=-1 on a 4-note subject -> position 3
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, -1, 0), subj[3]);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, -5, 0), subj[3]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, -1, 0), subj[3]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, -5, 0), subj[3]);
     PASS();
 }
 
@@ -1649,8 +1650,8 @@ TEST test_P_FUGUE_phase_plus_clock() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 1, 1),
-              fugue_run(&ss, 1, 0, 0, 0, 2));
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 1, 1),
+              fugue_run(&ss, 0, 1, 0, 0, 0, 2));
     PASS();
 }
 
@@ -1661,7 +1662,7 @@ TEST test_P_FUGUE_phase_retrograde() {
     fugue_setup(&ss, 0, 3, subj);
     // retrograde, phase 1, clock 0:
     // note_index = 0 + 1 = 1; pos = 1; reverse -> (4-1) - 1 = 2; subj[2] = 4
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 2, 1, 0), 4);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 2, 1, 0), 4);
     PASS();
 }
 
@@ -1671,7 +1672,7 @@ TEST test_P_FUGUE_negative_clock() {
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
     // clock=-1, div=1: note_index = -1; ((-1 % 4) + 4) % 4 = 3
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, -1), 7);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, -1), 7);
     PASS();
 }
 
@@ -1680,7 +1681,7 @@ TEST test_P_FUGUE_clock_zero() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 3);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 0), 3);
     PASS();
 }
 
@@ -1689,9 +1690,9 @@ TEST test_P_FUGUE_subject_len_one() {
     ss_init(&ss);
     int16_t subj[1] = { 9 };
     fugue_setup(&ss, 0, 0, subj);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 9);
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 7, 13), 9);
-    ASSERT_EQ(fugue_run(&ss, 3, 0, 2, 0, 100), 9);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 0), 9);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 7, 13), 9);
+    ASSERT_EQ(fugue_run(&ss, 0, 3, 0, 2, 0, 100), 9);
     PASS();
 }
 
@@ -1700,7 +1701,7 @@ TEST test_P_FUGUE_division_zero() {
     ss_init(&ss);
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
-    ASSERT_EQ(fugue_run(&ss, 0, 5, 1, 2, 7), 0);
+    ASSERT_EQ(fugue_run(&ss, 0, 0, 5, 1, 2, 7), 0);
     PASS();
 }
 
@@ -1710,10 +1711,10 @@ TEST test_P_FUGUE_mode_clamp() {
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
     // mode out of range -> treated as PRIME (0)
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 9, 0, 1),
-              fugue_run(&ss, 1, 0, 0, 0, 1));
-    ASSERT_EQ(fugue_run(&ss, 1, 0, -3, 0, 2),
-              fugue_run(&ss, 1, 0, 0, 0, 2));
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 9, 0, 1),
+              fugue_run(&ss, 0, 1, 0, 0, 0, 1));
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, -3, 0, 2),
+              fugue_run(&ss, 0, 1, 0, 0, 0, 2));
     PASS();
 }
 
@@ -1723,9 +1724,9 @@ TEST test_P_FUGUE_int16_min_clock() {
     int16_t subj[4] = { 3, 5, 4, 7 };
     fugue_setup(&ss, 0, 3, subj);
     // INT16_MIN = -32768; -32768 / 1 = -32768; ((-32768 % 4) + 4) % 4 = 0
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, INT16_MIN), subj[0]);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, INT16_MIN), subj[0]);
     // Same with abs_div=3: -32768 / 3 = -10922; (-10922 % 4 + 4) % 4 = 2
-    ASSERT_EQ(fugue_run(&ss, 3, 0, 0, 0, INT16_MIN), subj[2]);
+    ASSERT_EQ(fugue_run(&ss, 0, 3, 0, 0, 0, INT16_MIN), subj[2]);
     PASS();
 }
 
@@ -1735,9 +1736,9 @@ TEST test_P_FUGUE_transpose_clamps() {
     int16_t subj[2] = { 100, -100 };
     fugue_setup(&ss, 0, 1, subj);
     // transpose pushes note past INT16_MAX -> clamp
-    ASSERT_EQ(fugue_run(&ss, 1, INT16_MAX, 0, 0, 0), INT16_MAX);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, INT16_MAX, 0, 0, 0), INT16_MAX);
     // transpose pushes note past INT16_MIN -> clamp
-    ASSERT_EQ(fugue_run(&ss, 1, INT16_MIN, 0, 0, 1), INT16_MIN);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, INT16_MIN, 0, 0, 1), INT16_MIN);
     PASS();
 }
 
@@ -1749,8 +1750,8 @@ TEST test_P_FUGUE_inverted_window() {
     ss_set_pattern_end(&ss, 0, 2);
     ss_set_pattern_len(&ss, 0, 8);
     for (int i = 0; i < 8; i++) ss_set_pattern_val(&ss, 0, i, (int16_t)(i + 1));
-    ASSERT_EQ(fugue_run(&ss, 1, 0, 0, 0, 0), 0);
-    ASSERT_EQ(fugue_run(&ss, 1, 7, 2, 3, 5), 0);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 0), 0);
+    ASSERT_EQ(fugue_run(&ss, 0, 1, 7, 2, 3, 5), 0);
     PASS();
 }
 
@@ -1761,14 +1762,14 @@ TEST test_P_FUGUE_truncation_plateau() {
     fugue_setup(&ss, 0, 3, subj);
     // C truncation toward zero: clock={-1,0,1} all divide to 0 with abs_div=2,
     // forming a 3-wide plateau (asymmetric vs the 2-wide plateaus elsewhere).
-    int16_t v0 = fugue_run(&ss, 2, 0, 0, 0, 0);
+    int16_t v0 = fugue_run(&ss, 0, 2, 0, 0, 0, 0);
     ASSERT_EQ(v0, subj[0]);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, -1), v0);
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 1), v0);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, -1), v0);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 1), v0);
     // clock=-2 leaves the plateau backward
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, -2), subj[3]);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, -2), subj[3]);
     // clock=2 leaves the plateau forward
-    ASSERT_EQ(fugue_run(&ss, 2, 0, 0, 0, 2), subj[1]);
+    ASSERT_EQ(fugue_run(&ss, 0, 2, 0, 0, 0, 2), subj[1]);
     PASS();
 }
 
@@ -1789,7 +1790,7 @@ TEST test_P_FUGUE_inversion_nonzero_start() {
     // Inversion around subj[start]=3 -> {3,1,2,-1}
     int16_t expected[4] = { 3, 1, 2, -1 };
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 1, 0, 1, 0, t), expected[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 1, 0, t), expected[t]);
     }
     PASS();
 }
@@ -1803,12 +1804,12 @@ TEST test_PN_FUGUE_modes_and_phase() {
     ss_set_pattern_len(&ss, 2, 4);
     for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 2, i, subj[i]);
     // RETROGRADE
-    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 2, 0, 0), subj[3]);
-    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 2, 0, 1), subj[2]);
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 0, 1, 0, 2, 0, 0), subj[3]);
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 0, 1, 0, 2, 0, 1), subj[2]);
     // INVERSION
-    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 1, 0, 1), 1);  // 2*3 - 5
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 0, 1, 0, 1, 0, 1), 1);  // 2*3 - 5
     // phase + transpose through the 6-arg path
-    ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 7, 0, 2, 0), subj[2] + 7);
+    ASSERT_EQ(fugue_run_pn(&ss, 2, 0, 1, 7, 0, 2, 0), subj[2] + 7);
     PASS();
 }
 
@@ -1824,8 +1825,8 @@ TEST test_PN_FUGUE_pn_normalises() {
     for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, i, subj[i]);
     // pn=-1 and pn=999 must not crash; assert against bank 0 if they wrap there,
     // or at minimum produce a value within the int16 range.
-    int16_t v_neg = fugue_run_pn(&ss, -1, 1, 0, 0, 0, 0);
-    int16_t v_big = fugue_run_pn(&ss, 999, 1, 0, 0, 0, 0);
+    int16_t v_neg = fugue_run_pn(&ss, -1, 0, 1, 0, 0, 0, 0);
+    int16_t v_big = fugue_run_pn(&ss, 999, 0, 1, 0, 0, 0, 0);
     // Sanity: not arbitrary garbage — must be a known pattern value or 0.
     ASSERT(v_neg >= INT16_MIN && v_neg <= INT16_MAX);
     ASSERT(v_big >= INT16_MIN && v_big <= INT16_MAX);
@@ -1848,9 +1849,231 @@ TEST test_PN_FUGUE_explicit_bank() {
     ss_set_pattern_len(&ss, 2, 4);
     for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 2, i, subj2[i]);
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run_pn(&ss, 0, 1, 0, 0, 0, t), subj0[t]);
-        ASSERT_EQ(fugue_run_pn(&ss, 2, 1, 0, 0, 0, t), subj2[t]);
+        ASSERT_EQ(fugue_run_pn(&ss, 0, 0, 1, 0, 0, 0, t), subj0[t]);
+        ASSERT_EQ(fugue_run_pn(&ss, 2, 0, 1, 0, 0, 0, t), subj2[t]);
     }
+    PASS();
+}
+
+// P.FUGUE voice-protection helpers ///////////////////////////////////////////
+
+// All voice-protection tests use a constant subject {1,1,1,1} so that the
+// natural value of any voice equals `1 + transpose` regardless of clock.
+// This lets us vary `clock` to test staleness without having to track which
+// subject position each clock value reads.
+static void vp_setup(scene_state_t* ss) {
+    fugue_voice_state_reset();
+    ss_init(ss);
+    ss_set_pattern_start(ss, 0, 0);
+    ss_set_pattern_end(ss, 0, 3);
+    ss_set_pattern_len(ss, 0, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(ss, 0, i, 1);
+}
+
+// Run voice V with transpose chosen to produce the requested natural value.
+static int16_t vp_run(scene_state_t* ss, int voice, int natural_value,
+                     int clock) {
+    return fugue_run(ss, voice, 1, natural_value - 1, 0, 0, clock);
+}
+
+TEST test_P_FUGUE_voice0_stateless() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // voice=0 at the position voice-1 would normally occupy. Should NOT
+    // populate the state table.
+    (void)vp_run(&ss, 0, 3, 0);
+    // Now a voice 2 whose natural value is 4 (a 2nd above 3) should NOT be
+    // adjusted, because voice=0 didn't write any state.
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice1_stores_state() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // voice 1 plays degree 3.
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    // voice 2 whose natural value is 4 (2nd above) is bumped to 5.
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice2_no_clash() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    // 3rd above 1 = degree 3, consonant.
+    ASSERT_EQ(vp_run(&ss, 2, 3, 0), 3);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice2_avoids_2nd() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice2_avoids_7th() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    // natural = 7 (a 7th above 1) -> bump to 8.
+    ASSERT_EQ(vp_run(&ss, 2, 7, 0), 8);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice2_stale_ignored() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    // voice 2 at a different clock: voice-1 entry is stale -> no adjustment.
+    ASSERT_EQ(vp_run(&ss, 2, 4, 1), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice3_avoids_both() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 3, 0), 3);
+    // V3 natural=4: 2nd above V2 (diff=1) -> bump up to 5.
+    // V3=5 vs V1=1 diff=4, vs V2=3 diff=2 -> both consonant.
+    ASSERT_EQ(vp_run(&ss, 3, 4, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_cascading_adjust() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1=3, V2=7 (4th above V1, consonant -> stays at 7).
+    // V3 natural=8:
+    //   iter1: vs V1 diff=5 OK; vs V2 diff=1 clash, push UP -> 9.
+    //   iter2: vs V1 diff=6, |%7|=6 clash, push UP -> 10.
+    //   iter3: vs V1 diff=7 octave OK; vs V2 diff=3 OK. Done.
+    // Two adjustments through two distinct lower-voice clashes.
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 2, 7, 0), 7);
+    ASSERT_EQ(vp_run(&ss, 3, 8, 0), 10);
+    PASS();
+}
+
+TEST test_P_FUGUE_unison_allowed() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 2, 3, 0), 3);  // unison: allowed
+    PASS();
+}
+
+TEST test_P_FUGUE_octave_allowed() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    // diff=7 -> |%7|=0, allowed.
+    ASSERT_EQ(vp_run(&ss, 2, 10, 0), 10);
+    PASS();
+}
+
+TEST test_P_FUGUE_compound_dissonance() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    // V2 natural=11: diff=8, |%7|=1 -> compound 2nd, bump up.
+    ASSERT_EQ(vp_run(&ss, 2, 11, 0), 12);
+    PASS();
+}
+
+TEST test_PN_FUGUE_bank_isolation() {
+    scene_state_t ss;
+    fugue_voice_state_reset();
+    ss_init(&ss);
+    int16_t subj[4] = { 1, 2, 3, 4 };
+    for (int b = 0; b < 2; b++) {
+        ss_set_pattern_start(&ss, b, 0);
+        ss_set_pattern_end(&ss, b, 3);
+        ss_set_pattern_len(&ss, b, 4);
+        for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, b, i, subj[i]);
+    }
+    // Bank 0: V1=3.
+    ASSERT_EQ(fugue_run_pn(&ss, 0, 1, 1, 2, 0, 0, 0), 3);
+    // Bank 1: V2 natural=4 — would clash with bank 0's V1=3 if state were
+    // shared. Must NOT be adjusted since banks are independent.
+    ASSERT_EQ(fugue_run_pn(&ss, 1, 2, 1, 3, 0, 0, 0), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_voice_clamps() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // voice=5 clamps to 4. Without other voices, no adjustment occurs but
+    // the state table entry for slot 4 should be written.
+    ASSERT_EQ(fugue_run(&ss, 5, 1, 2, 0, 0, 0), 3);
+    // voice=-1 clamps to 0, fully stateless: no write to slot 0.
+    // Confirm by checking that voice 2 still sees no constraints (no lower
+    // voice has written for this clock).
+    fugue_voice_state_reset();
+    (void)fugue_run(&ss, -1, 1, 2, 0, 0, 0);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_state_persists_within_tick() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 3, 0), 3);
+    // V3 natural=4: clashes with V2=3 (diff=1). V3 -> 5. Then vs V1=1: diff=4.
+    ASSERT_EQ(vp_run(&ss, 3, 4, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_state_expires_across_ticks() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 10), 3);
+    // No V1 call at clock=20; V2's clash check sees stale state, ignores it.
+    ASSERT_EQ(vp_run(&ss, 2, 4, 20), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_bidirectional_above() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 5);  // push UP
+    PASS();
+}
+
+TEST test_P_FUGUE_bidirectional_below() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1=5, V2 natural=4 (2nd below) -> push DOWN to 3.
+    ASSERT_EQ(vp_run(&ss, 1, 5, 0), 5);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 3);
+    PASS();
+}
+
+TEST test_P_FUGUE_no_upward_drift() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1 stable at 4. V2 natural oscillates between 5 and 3 (alternating 2nds
+    // above and below). Under "always +1" V2's mean drifts upward; under the
+    // bidirectional rule, pushes alternate up and down and the mean stays
+    // near the natural mean.
+    int natural_sum = 0;
+    int actual_sum = 0;
+    for (int t = 0; t < 100; t++) {
+        ASSERT_EQ(vp_run(&ss, 1, 4, t), 4);
+        int natural = (t % 2 == 0) ? 5 : 3;
+        natural_sum += natural;
+        actual_sum += vp_run(&ss, 2, natural, t);
+    }
+    // Under bidirectional, V2 outputs alternate 6/2 (push away from V1=4 in
+    // each direction). Mean exactly matches natural mean. Under "always +1"
+    // V2 would output 6/4, drifting +50 over 100 calls.
+    ASSERT_EQ(actual_sum, natural_sum);
     PASS();
 }
 
@@ -1946,4 +2169,22 @@ SUITE(process_suite) {
     RUN_TEST(test_PN_FUGUE_modes_and_phase);
     RUN_TEST(test_PN_FUGUE_pn_normalises);
     RUN_TEST(test_PN_FUGUE_explicit_bank);
+    RUN_TEST(test_P_FUGUE_voice0_stateless);
+    RUN_TEST(test_P_FUGUE_voice1_stores_state);
+    RUN_TEST(test_P_FUGUE_voice2_no_clash);
+    RUN_TEST(test_P_FUGUE_voice2_avoids_2nd);
+    RUN_TEST(test_P_FUGUE_voice2_avoids_7th);
+    RUN_TEST(test_P_FUGUE_voice2_stale_ignored);
+    RUN_TEST(test_P_FUGUE_voice3_avoids_both);
+    RUN_TEST(test_P_FUGUE_cascading_adjust);
+    RUN_TEST(test_P_FUGUE_unison_allowed);
+    RUN_TEST(test_P_FUGUE_octave_allowed);
+    RUN_TEST(test_P_FUGUE_compound_dissonance);
+    RUN_TEST(test_PN_FUGUE_bank_isolation);
+    RUN_TEST(test_P_FUGUE_voice_clamps);
+    RUN_TEST(test_P_FUGUE_state_persists_within_tick);
+    RUN_TEST(test_P_FUGUE_state_expires_across_ticks);
+    RUN_TEST(test_P_FUGUE_bidirectional_above);
+    RUN_TEST(test_P_FUGUE_bidirectional_below);
+    RUN_TEST(test_P_FUGUE_no_upward_drift);
 }
