@@ -140,6 +140,8 @@ typedef enum {
     E_OP_PN_CP,
     E_OP_P_FUGUE,
     E_OP_PN_FUGUE,
+    E_OP_P_ORN,
+    E_OP_PN_ORN,
     E_OP_Q,
     E_OP_Q_AVG,
     E_OP_Q_N,

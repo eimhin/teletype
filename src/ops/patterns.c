@@ -1442,6 +1442,93 @@ const tele_op_t op_P_FUGUE = MAKE_GET_OP(P.FUGUE, op_P_FUGUE_get, 6, true);
 const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 7, true);
 
 ////////////////////////////////////////////////////////////////////////////////
+// P.ORN PN.ORN ////////////////////////////////////////////////////////////////
+//
+// Stateless, read-only diatonic ornament reader. Given a focal position in the
+// pattern's START..END window and an ornament type (0..10), returns a single
+// value derived from the focal note and its immediate neighbours. Values are
+// scale degrees (1..7 = one octave), so the arithmetic below is in diatonic
+// steps, not semitones. No writes, no playhead advance, no state, no
+// randomness: same pattern + same args always yields the same value.
+//
+//   0  NONE          focal note unchanged
+//   1  ANTICIPATION  the next note (played early)
+//   2  SUSPENSION    the previous note (held over)
+//   3  NEIGHBOR_UP   focal + 1        4  NEIGHBOR_DN  focal - 1
+//   5  OCTAVE_UP     focal + 7        6  OCTAVE_DN    focal - 7
+//   7  FIFTH_UP      focal + 4        8  FIFTH_DN     focal - 4
+//   9  HALF_TURN_T   one degree past the next note, in the line's direction
+//  10  HALF_TURN_A   one degree from the focal note, opposite the line
+
+static int16_t orn_read(scene_state_t *ss, int16_t pn, int16_t type,
+                        int16_t position) {
+    pn = normalise_pn(pn);
+    int16_t start = ss_get_pattern_start(ss, pn);
+    int16_t end = ss_get_pattern_end(ss, pn);
+    int len = (int)end - (int)start + 1;
+
+    if (len < 1) return 0;                // empty window (START > END)
+    if (type < 0 || type > 10) type = 0;  // unknown type -> NONE
+
+    // safe-modulo wrap of position into [start, end]
+    int rel = (((int)position - start) % len + len) % len;
+    int idx = start + rel;
+    int next_idx = (idx == end) ? start : idx + 1;  // neighbours wrap
+    int prev_idx = (idx == start) ? end : idx - 1;
+
+    int current = ss_get_pattern_val(ss, pn, idx);
+    int next_note = ss_get_pattern_val(ss, pn, next_idx);
+    int prev_note = ss_get_pattern_val(ss, pn, prev_idx);
+
+    int result;
+    switch (type) {
+        case 0: result = current; break;      // NONE
+        case 1: result = next_note; break;    // ANTICIPATION
+        case 2: result = prev_note; break;    // SUSPENSION
+        case 3: result = current + 1; break;  // NEIGHBOR_UP
+        case 4: result = current - 1; break;  // NEIGHBOR_DN
+        case 5: result = current + 7; break;  // OCTAVE_UP
+        case 6: result = current - 7; break;  // OCTAVE_DN
+        case 7: result = current + 4; break;  // FIFTH_UP
+        case 8: result = current - 4; break;  // FIFTH_DN
+        case 9: {                             // HALF_TURN_T
+            int dir = (next_note > current)   ? 1
+                      : (next_note < current) ? -1
+                                              : 1;
+            result = next_note + dir;
+            break;
+        }
+        case 10: {  // HALF_TURN_A
+            int dir = (next_note > current)   ? 1
+                      : (next_note < current) ? -1
+                                              : 1;
+            result = current - dir;
+            break;
+        }
+        default: result = current; break;
+    }
+    return cp_clamp_i16(result);
+}
+
+static void op_P_ORN_get(const void *NOTUSED(data), scene_state_t *ss,
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t type = cs_pop(cs);
+    int16_t position = cs_pop(cs);
+    cs_push(cs, orn_read(ss, ss->variables.p_n, type, position));
+}
+
+static void op_PN_ORN_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t type = cs_pop(cs);
+    int16_t position = cs_pop(cs);
+    cs_push(cs, orn_read(ss, pn, type, position));
+}
+
+const tele_op_t op_P_ORN = MAKE_GET_OP(P.ORN, op_P_ORN_get, 2, true);
+const tele_op_t op_PN_ORN = MAKE_GET_OP(PN.ORN, op_PN_ORN_get, 3, true);
+
+////////////////////////////////////////////////////////////////////////////////
 // P.+ P.+W ////////////////////////////////////////////////////////////////////
 
 static void p_add_get(scene_state_t *ss, int16_t pn, int16_t idx, int16_t delta,

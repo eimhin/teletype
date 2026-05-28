@@ -130,6 +130,8 @@
         "PN.CP"       => { MATCH_OP(E_OP_PN_CP); };
         "P.FUGUE"     => { MATCH_OP(E_OP_P_FUGUE); };
         "PN.FUGUE"    => { MATCH_OP(E_OP_PN_FUGUE); };
+        "P.ORN"       => { MATCH_OP(E_OP_P_ORN); };
+        "PN.ORN"      => { MATCH_OP(E_OP_PN_ORN); };
         "P.D"         => { MATCH_OP(E_OP_P_D); };
         "PN.D"        => { MATCH_OP(E_OP_PN_D); };
         "P.D.HERE"    => { MATCH_OP(E_OP_P_D_HERE); };

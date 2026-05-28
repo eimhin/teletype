@@ -2296,6 +2296,303 @@ TEST test_P_FUGUE_no_upward_drift() {
     PASS();
 }
 
+// ---- P.ORN / PN.ORN -------------------------------------------------------
+
+static void orn_setup(scene_state_t* ss, int bank, int start, int end,
+                      const int16_t* vals) {
+    ss_set_pattern_start(ss, bank, (int16_t)start);
+    ss_set_pattern_end(ss, bank, (int16_t)end);
+    // P.ORN derives its window from start/end, not len; len is set only to
+    // keep the fixture a realistic, well-formed pattern.
+    ss_set_pattern_len(ss, bank, (int16_t)(end + 1));
+    for (int i = start; i <= end; i++) {
+        ss_set_pattern_val(ss, bank, (int16_t)i, vals[i - start]);
+    }
+    ss_set_pattern_idx(ss, bank, (int16_t)start);
+}
+
+static int16_t orn_run(scene_state_t* ss, int type, int position) {
+    char line[32];
+    snprintf(line, sizeof(line), "P.ORN %d %d", type, position);
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(line, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(ss, &es, &cmd);
+    return r.value;
+}
+
+static int16_t orn_run_pn(scene_state_t* ss, int pn, int type, int position) {
+    char line[32];
+    snprintf(line, sizeof(line), "PN.ORN %d %d %d", pn, type, position);
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(line, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(ss, &es, &cmd);
+    return r.value;
+}
+
+TEST test_P_ORN_determinism() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    // same pattern + same args -> identical output every call
+    for (int t = 0; t <= 10; t++) {
+        int16_t first = orn_run(&ss, t, 1);
+        ASSERT_EQ(orn_run(&ss, t, 1), first);
+        ASSERT_EQ(orn_run(&ss, t, 1), first);
+    }
+    PASS();
+}
+
+TEST test_P_ORN_no_side_effects() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    // distinctive, non-boundary playhead so an accidental reset-to-start or
+    // advance would be visibly caught (orn_setup leaves idx at start == 0)
+    ss_set_pattern_idx(&ss, 0, 2);
+    int16_t idx_before = ss_get_pattern_idx(&ss, 0);
+    // exercise every type / a range of positions
+    for (int t = -2; t <= 12; t++) {
+        for (int p = -3; p <= 6; p++) { orn_run(&ss, t, p); }
+    }
+    // pattern contents unchanged
+    for (int i = 0; i < 4; i++) {
+        ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), vals[i]);
+    }
+    // playhead unchanged
+    ASSERT_EQ(ss_get_pattern_idx(&ss, 0), idx_before);
+    PASS();
+}
+
+TEST test_P_ORN_none() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 0, 0), 3);
+    ASSERT_EQ(orn_run(&ss, 0, 1), 5);
+    ASSERT_EQ(orn_run(&ss, 0, 2), 4);
+    ASSERT_EQ(orn_run(&ss, 0, 3), 7);
+    PASS();
+}
+
+TEST test_P_ORN_anticipation() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 1, 0), 5);  // next note
+    ASSERT_EQ(orn_run(&ss, 1, 1), 4);
+    PASS();
+}
+
+TEST test_P_ORN_suspension() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 2, 1), 3);  // previous note
+    ASSERT_EQ(orn_run(&ss, 2, 2), 5);
+    PASS();
+}
+
+TEST test_P_ORN_neighbors() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 3, 1), 6);  // value 5 + 1
+    ASSERT_EQ(orn_run(&ss, 4, 1), 4);  // value 5 - 1
+    PASS();
+}
+
+TEST test_P_ORN_octaves_and_fifths() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 10, 1, 5 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 5, 0), 10);  // OCTAVE_UP: 3 + 7
+    ASSERT_EQ(orn_run(&ss, 6, 1), 3);   // OCTAVE_DN: 10 - 7
+    ASSERT_EQ(orn_run(&ss, 7, 2), 5);   // FIFTH_UP:  1 + 4
+    ASSERT_EQ(orn_run(&ss, 8, 3), 1);   // FIFTH_DN:  5 - 4
+    PASS();
+}
+
+TEST test_P_ORN_half_turn_t() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t asc[2] = { 3, 5 };
+    orn_setup(&ss, 0, 0, 1, asc);
+    ASSERT_EQ(orn_run(&ss, 9, 0), 6);  // ascending: next(5) + 1
+    int16_t desc[2] = { 5, 3 };
+    orn_setup(&ss, 0, 0, 1, desc);
+    ASSERT_EQ(orn_run(&ss, 9, 0), 2);  // descending: next(3) - 1
+    PASS();
+}
+
+TEST test_P_ORN_half_turn_a() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t asc[2] = { 3, 5 };
+    orn_setup(&ss, 0, 0, 1, asc);
+    ASSERT_EQ(orn_run(&ss, 10, 0), 2);  // ascending: current(3) - 1
+    int16_t desc[2] = { 5, 3 };
+    orn_setup(&ss, 0, 0, 1, desc);
+    ASSERT_EQ(orn_run(&ss, 10, 0), 6);  // descending: current(5) + 1
+    PASS();
+}
+
+TEST test_P_ORN_half_turn_no_motion() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t flat[2] = { 5, 5 };
+    orn_setup(&ss, 0, 0, 1, flat);
+    // no motion -> stable default direction (+1, ascending)
+    int16_t t = orn_run(&ss, 9, 0);
+    int16_t a = orn_run(&ss, 10, 0);
+    ASSERT_EQ(t, 6);  // next(5) + 1
+    ASSERT_EQ(a, 4);  // current(5) - 1
+    // and it is deterministic
+    ASSERT_EQ(orn_run(&ss, 9, 0), t);
+    ASSERT_EQ(orn_run(&ss, 10, 0), a);
+    PASS();
+}
+
+TEST test_P_ORN_neighbor_wraps() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 1, 3), 3);  // anticipation at end wraps to start
+    ASSERT_EQ(orn_run(&ss, 2, 0), 7);  // suspension at start wraps to end
+    PASS();
+}
+
+TEST test_P_ORN_position_wraps() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 0, 17), 5);  // 17 mod 4 = 1 -> vals[1]
+    ASSERT_EQ(orn_run(&ss, 0, -1), 7);  // -1 wraps to 3 -> vals[3]
+    ASSERT_EQ(orn_run(&ss, 0, 4), 3);   // one full period -> vals[0]
+    PASS();
+}
+
+TEST test_P_ORN_type_clamp() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    ASSERT_EQ(orn_run(&ss, 11, 0), 3);  // 11 -> NONE -> vals[0]
+    ASSERT_EQ(orn_run(&ss, -1, 0), 3);  // -1 -> NONE -> vals[0]
+    PASS();
+}
+
+TEST test_P_ORN_window_one() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t one[1] = { 5 };
+    orn_setup(&ss, 0, 0, 0, one);
+    ASSERT_EQ(orn_run(&ss, 0, 0), 5);   // NONE
+    ASSERT_EQ(orn_run(&ss, 1, 0), 5);   // ANTICIPATION -> single cell
+    ASSERT_EQ(orn_run(&ss, 2, 0), 5);   // SUSPENSION   -> single cell
+    ASSERT_EQ(orn_run(&ss, 3, 0), 6);   // NEIGHBOR_UP
+    ASSERT_EQ(orn_run(&ss, 6, 0), -2);  // OCTAVE_DN: 5 - 7
+    PASS();
+}
+
+TEST test_P_ORN_empty_window() {
+    scene_state_t ss;
+    ss_init(&ss);
+    ss_set_pattern_start(&ss, 0, 2);
+    ss_set_pattern_end(&ss, 0, 1);  // START > END
+    ASSERT_EQ(orn_run(&ss, 0, 0), 0);
+    ASSERT_EQ(orn_run(&ss, 5, 3), 0);
+    PASS();
+}
+
+TEST test_P_ORN_symmetry() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, vals);
+    for (int p = 0; p < 4; p++) {
+        int16_t v = ss_get_pattern_val(&ss, 0, p);
+        // up/down pairs straddle the focal note symmetrically: their sum is
+        // 2*focal AND the up-down span pins each ornament's magnitude (a +6/-6
+        // octave bug would pass the sum but fail the span).
+        ASSERT_EQ(orn_run(&ss, 5, p) + orn_run(&ss, 6, p), 2 * v);  // octave
+        ASSERT_EQ(orn_run(&ss, 7, p) + orn_run(&ss, 8, p), 2 * v);  // fifth
+        ASSERT_EQ(orn_run(&ss, 3, p) + orn_run(&ss, 4, p), 2 * v);  // neighbor
+        ASSERT_EQ(orn_run(&ss, 5, p) - orn_run(&ss, 6, p), 14);     // octave
+        ASSERT_EQ(orn_run(&ss, 7, p) - orn_run(&ss, 8, p), 8);      // fifth
+        ASSERT_EQ(orn_run(&ss, 3, p) - orn_run(&ss, 4, p), 2);      // neighbor
+    }
+    PASS();
+}
+
+TEST test_PN_ORN_explicit_bank() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t bank0[4] = { 0, 0, 0, 0 };
+    int16_t bank1[4] = { 3, 5, 4, 7 };
+    orn_setup(&ss, 0, 0, 3, bank0);
+    orn_setup(&ss, 1, 0, 3, bank1);
+    // PN.ORN reads the named bank, not the working pattern
+    ASSERT_EQ(orn_run_pn(&ss, 1, 0, 1), 5);   // NONE on bank 1
+    ASSERT_EQ(orn_run_pn(&ss, 1, 1, 0), 5);   // ANTICIPATION on bank 1
+    ASSERT_EQ(orn_run_pn(&ss, 1, 5, 0), 10);  // OCTAVE_UP: 3 + 7
+    // working-pattern op still reads bank 0 (all zeros)
+    ASSERT_EQ(orn_run(&ss, 0, 1), 0);
+    PASS();
+}
+
+TEST test_P_ORN_half_turn_line() {
+    // Half-turns on a non-degenerate (>2 cell) window, focal in the middle so
+    // "next" is a real neighbour rather than a wrap-around.
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t asc[4] = { 3, 4, 5, 7 };  // ascending line
+    orn_setup(&ss, 0, 0, 3, asc);
+    // pos 1: current 4, next 5, dir +1
+    ASSERT_EQ(orn_run(&ss, 9, 1), 6);   // HALF_TURN_T: next(5) + 1
+    ASSERT_EQ(orn_run(&ss, 10, 1), 3);  // HALF_TURN_A: current(4) - 1
+    int16_t desc[4] = { 7, 5, 4, 3 };   // descending line
+    orn_setup(&ss, 0, 0, 3, desc);
+    // pos 1: current 5, next 4, dir -1
+    ASSERT_EQ(orn_run(&ss, 9, 1), 3);   // HALF_TURN_T: next(4) - 1
+    ASSERT_EQ(orn_run(&ss, 10, 1), 6);  // HALF_TURN_A: current(5) + 1
+    PASS();
+}
+
+TEST test_PN_ORN_bank_clamp() {
+    // normalise_pn clamps the bank arg: pn >= PATTERN_COUNT -> last bank,
+    // pn < 0 -> bank 0. This is the only PN-specific path P.ORN can't reach.
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t b0[2] = { 1, 2 };
+    int16_t blast[2] = { 9, 8 };
+    orn_setup(&ss, 0, 0, 1, b0);
+    orn_setup(&ss, PATTERN_COUNT - 1, 0, 1, blast);
+    ASSERT_EQ(orn_run_pn(&ss, 99, 0, 0), 9);  // clamps to last bank
+    ASSERT_EQ(orn_run_pn(&ss, -1, 0, 0), 1);  // clamps to bank 0
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -2417,4 +2714,23 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_clamp_catches_compounded_drift);
     RUN_TEST(test_P_FUGUE_mode3_composes_with_voice_and_clamp);
     RUN_TEST(test_P_FUGUE_clamp_no_lower_voices_noop);
+    RUN_TEST(test_P_ORN_determinism);
+    RUN_TEST(test_P_ORN_no_side_effects);
+    RUN_TEST(test_P_ORN_none);
+    RUN_TEST(test_P_ORN_anticipation);
+    RUN_TEST(test_P_ORN_suspension);
+    RUN_TEST(test_P_ORN_neighbors);
+    RUN_TEST(test_P_ORN_octaves_and_fifths);
+    RUN_TEST(test_P_ORN_half_turn_t);
+    RUN_TEST(test_P_ORN_half_turn_a);
+    RUN_TEST(test_P_ORN_half_turn_no_motion);
+    RUN_TEST(test_P_ORN_neighbor_wraps);
+    RUN_TEST(test_P_ORN_position_wraps);
+    RUN_TEST(test_P_ORN_type_clamp);
+    RUN_TEST(test_P_ORN_window_one);
+    RUN_TEST(test_P_ORN_empty_window);
+    RUN_TEST(test_P_ORN_symmetry);
+    RUN_TEST(test_PN_ORN_explicit_bank);
+    RUN_TEST(test_P_ORN_half_turn_line);
+    RUN_TEST(test_PN_ORN_bank_clamp);
 }
