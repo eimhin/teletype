@@ -1291,6 +1291,12 @@ const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
 // out of order produces unreliable avoidance but is not catastrophic. The
 // state table is reset whenever ss_init runs (scene load, INIT op,
 // firmware boot), so it can never leak voice slots from a prior scene.
+//
+// After avoidance, the candidate is octave-shifted (±7) until it sits
+// within ±14 diatonic degrees of the lowest currently-tracked lower voice.
+// This caps inter-voice register separation at two octaves to prevent
+// unbounded drift from cascading adjustments. The clamp takes precedence
+// over avoidance: a shifted value that lands on a 2nd or 7th is accepted.
 
 #define FUGUE_VOICE_COUNT 5 /* slots 0..4; slot 0 unused (voices are 1..4) */
 
@@ -1375,6 +1381,26 @@ static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t voice,
                 }
             }
         }
+    }
+
+    // Octave clamp: shift the post-avoidance candidate by ±7 until it sits
+    // within ±14 of the lowest currently-tracked lower voice. Caps inter-
+    // voice register spread at two octaves to prevent unbounded drift from
+    // cascading adjustments. Takes precedence over avoidance: a shifted
+    // value that lands on a 2nd or 7th is accepted as-is.
+    {
+        int32_t lowest = candidate;
+        for (int v = 1; v < voice; v++) {
+            fugue_voice_slot_t *slot = &fugue_voice_state[pn][v];
+            if (!slot->valid || slot->last_clock != (int32_t)clock) continue;
+            if (slot->note < lowest) lowest = slot->note;
+        }
+        int32_t max_allowed = lowest + 14;
+        int32_t min_allowed = lowest - 14;
+        int32_t c = candidate;
+        while (c > max_allowed) c -= 7;
+        while (c < min_allowed) c += 7;
+        candidate = cp_clamp_i16(c);
     }
 
     fugue_voice_state[pn][voice].note = candidate;

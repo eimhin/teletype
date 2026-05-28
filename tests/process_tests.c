@@ -2052,6 +2052,79 @@ TEST test_P_FUGUE_out_of_order_voices() {
     PASS();
 }
 
+TEST test_P_FUGUE_clamp_triggers_on_extreme_drift() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1=1; V2 natural=21 (transpose=20).
+    // Avoidance: vs V1 diff=20, |%7|=6 clash, push UP -> 22. vs V1 diff=21,
+    // |%7|=0 octave allowed. Candidate=22.
+    // Clamp: lowest=1, max_allowed=15. 22 -> 15.
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 21, 0), 15);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_preserves_consonance() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // Same as above; final V2=15 vs V1=1: diff=14, |%7|=0 -> consonant
+    // (two octaves). The ±14 window edge is itself a consonant interval.
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    int16_t v2 = vp_run(&ss, 2, 21, 0);
+    int interval = v2 - 1;
+    int abs_mod7 = (interval < 0 ? -interval : interval) % 7;
+    ASSERT_EQ(abs_mod7, 0);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_below_lowest_voice() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // The clamp computes `lowest = min(candidate, all lower voices)`. So a
+    // candidate that's already below all lower voices simply becomes the
+    // new lowest — no upward shift triggers. V1=20, V2 natural=-10: V2 vs
+    // V1 diff=-30, |%7|=2 OK. lowest = min(-10, 20) = -10. Bounds
+    // [-24, 4], candidate -10 in range. Returns -10 unchanged.
+    ASSERT_EQ(vp_run(&ss, 1, 20, 0), 20);
+    ASSERT_EQ(vp_run(&ss, 2, -10, 0), -10);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_pushes_third_voice_down() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1=1, V2=2 (V2 auto-bumps to 3 via avoidance), V3 natural=30.
+    // V3 avoidance: vs V1 diff=29, |%7|=1 clash, push UP -> 31. vs V1
+    // diff=30, |%7|=2 OK. vs V2=3 diff=28, |%7|=0 octave OK. Candidate=31.
+    // Clamp: lowest = min(31, 1, 3) = 1. max_allowed = 15. 31 -> 24 -> 17
+    // -> 10. 10 <= 15, stop. Final=10.
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 2, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 3, 30, 0), 10);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_idempotent_in_normal_range() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // Re-run the avoid_2nd scenario explicitly to lock that the clamp is a
+    // no-op for in-range candidates. V1=3, V2 natural=4 -> 5. With lowest=3,
+    // max_allowed=17, min_allowed=-11; candidate 5 is in range, no shift.
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 5);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_no_lower_voices_noop() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // voice=1 has no lower voices: lowest defaults to candidate, bounds are
+    // candidate ± 14, candidate is trivially in range. No shift even at an
+    // extreme transpose.
+    ASSERT_EQ(vp_run(&ss, 1, 100, 0), 100);
+    PASS();
+}
+
 TEST test_P_FUGUE_phantom_zero_state() {
     scene_state_t ss;
     vp_setup(&ss);
@@ -2235,4 +2308,10 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_safety_terminates);
     RUN_TEST(test_P_FUGUE_out_of_order_voices);
     RUN_TEST(test_P_FUGUE_phantom_zero_state);
+    RUN_TEST(test_P_FUGUE_clamp_triggers_on_extreme_drift);
+    RUN_TEST(test_P_FUGUE_clamp_preserves_consonance);
+    RUN_TEST(test_P_FUGUE_clamp_below_lowest_voice);
+    RUN_TEST(test_P_FUGUE_clamp_pushes_third_voice_down);
+    RUN_TEST(test_P_FUGUE_clamp_idempotent_in_normal_range);
+    RUN_TEST(test_P_FUGUE_clamp_no_lower_voices_noop);
 }
