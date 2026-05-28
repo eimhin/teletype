@@ -1383,11 +1383,17 @@ static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t voice,
         }
     }
 
-    // Octave clamp: shift the post-avoidance candidate by ±7 until it sits
-    // within ±14 of the lowest currently-tracked lower voice. Caps inter-
-    // voice register spread at two octaves to prevent unbounded drift from
-    // cascading adjustments. Takes precedence over avoidance: a shifted
-    // value that lands on a 2nd or 7th is accepted as-is.
+    // Octave clamp: shift the post-avoidance candidate down by 7 until it
+    // sits within +14 of the lowest currently-tracked lower voice. Caps
+    // inter-voice register spread at two octaves above the lowest voice
+    // to prevent unbounded drift from cascading adjustments. Takes
+    // precedence over avoidance: a shifted value that lands on a 2nd or
+    // 7th is accepted as-is.
+    //
+    // Note: `lowest` is initialised to `candidate` so that with no valid
+    // lower voices the bound trivially admits the candidate. Because
+    // `lowest <= candidate` always under this init, the candidate can
+    // never be below `lowest - 14`; only the upper branch can fire.
     {
         int32_t lowest = candidate;
         for (int v = 1; v < voice; v++) {
@@ -1396,10 +1402,8 @@ static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t voice,
             if (slot->note < lowest) lowest = slot->note;
         }
         int32_t max_allowed = lowest + 14;
-        int32_t min_allowed = lowest - 14;
         int32_t c = candidate;
         while (c > max_allowed) c -= 7;
-        while (c < min_allowed) c += 7;
         candidate = cp_clamp_i16(c);
     }
 

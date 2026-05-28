@@ -2064,27 +2064,13 @@ TEST test_P_FUGUE_clamp_triggers_on_extreme_drift() {
     PASS();
 }
 
-TEST test_P_FUGUE_clamp_preserves_consonance() {
-    scene_state_t ss;
-    vp_setup(&ss);
-    // Same as above; final V2=15 vs V1=1: diff=14, |%7|=0 -> consonant
-    // (two octaves). The ±14 window edge is itself a consonant interval.
-    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
-    int16_t v2 = vp_run(&ss, 2, 21, 0);
-    int interval = v2 - 1;
-    int abs_mod7 = (interval < 0 ? -interval : interval) % 7;
-    ASSERT_EQ(abs_mod7, 0);
-    PASS();
-}
-
 TEST test_P_FUGUE_clamp_below_lowest_voice() {
     scene_state_t ss;
     vp_setup(&ss);
-    // The clamp computes `lowest = min(candidate, all lower voices)`. So a
-    // candidate that's already below all lower voices simply becomes the
-    // new lowest — no upward shift triggers. V1=20, V2 natural=-10: V2 vs
-    // V1 diff=-30, |%7|=2 OK. lowest = min(-10, 20) = -10. Bounds
-    // [-24, 4], candidate -10 in range. Returns -10 unchanged.
+    // Documents that the clamp only bounds from above. A candidate already
+    // far below a lower voice simply becomes the new lowest (lowest is the
+    // min of candidate and lower voices), and the upper bound is
+    // candidate+14, so the candidate is in range. No shift.
     ASSERT_EQ(vp_run(&ss, 1, 20, 0), 20);
     ASSERT_EQ(vp_run(&ss, 2, -10, 0), -10);
     PASS();
@@ -2104,14 +2090,73 @@ TEST test_P_FUGUE_clamp_pushes_third_voice_down() {
     PASS();
 }
 
-TEST test_P_FUGUE_clamp_idempotent_in_normal_range() {
+TEST test_P_FUGUE_clamp_v4_anchors_to_lowest() {
     scene_state_t ss;
     vp_setup(&ss);
-    // Re-run the avoid_2nd scenario explicitly to lock that the clamp is a
-    // no-op for in-range candidates. V1=3, V2 natural=4 -> 5. With lowest=3,
-    // max_allowed=17, min_allowed=-11; candidate 5 is in range, no shift.
-    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);
-    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 5);
+    // 4-voice scenario — exercises the loop bound `v < voice` for voice=4
+    // and confirms the clamp anchors to the *minimum* across all three
+    // lower voices, not just one of them.
+    // V1=10, V2=12 (3rd above V1, no avoidance), V3=14 (3rd above V2),
+    // V4 natural=29: avoidance bumps it to 30 then 31 against successive
+    // octave-class clashes against V1=10. lowest=min(31,10,12,14)=10,
+    // max_allowed=24. 31 -> 24. Final=24.
+    //
+    // If a future bug iterated only `v < voice - 1` (off-by-one), lowest
+    // would be min(31, 10, 12) = 10 (still). To make the off-by-one
+    // detectable, choose values so that ignoring V3 changes the min.
+    // Set V1=20 (high), V2=15, V3=10 (lowest!), V4 natural=30: V4 avoidance
+    // - vs V1=20: diff=10, |%7|=3 OK.
+    // - vs V2=15: diff=15, |%7|=1 clash, push UP -> 31.
+    // - vs V1: diff=11, |%7|=4 OK.
+    // - vs V2: diff=16, |%7|=2 OK.
+    // - vs V3=10: diff=21, |%7|=0 octave OK. Candidate=31.
+    // Clamp: lowest = min(31, 20, 15, 10) = 10. max_allowed=24. 31->24.
+    // If V3 were not consulted, lowest = min(31, 20, 15) = 15,
+    // max_allowed=29, would give 31->24 still (diff=7 above). Hmm, same.
+    // Try V3 even lower: V3=5, V4 natural=30.
+    // - V4 vs V1=20 diff=10 |%7|=3 OK. vs V2=15 diff=15 |%7|=1 clash, push
+    //   UP -> 31. vs V1 diff=11 OK. vs V2 diff=16 |%7|=2 OK. vs V3=5
+    //   diff=26 |%7|=5 OK. Candidate=31.
+    // Clamp: lowest=min(31, 20, 15, 5) = 5. max_allowed=19. 31->24->17.
+    // Final=17. If V3 ignored: lowest=15, max_allowed=29, returns 31 with
+    // upper clamp NOT firing (31 > 29 fires once -> 24, then 24<=29 stops).
+    // So V3-ignored result = 24. V3-included result = 17. Discriminating!
+    ASSERT_EQ(vp_run(&ss, 1, 20, 0), 20);
+    ASSERT_EQ(vp_run(&ss, 2, 15, 0), 15);  // 15-20=-5 |%7|=5 OK
+    // V3 natural=5: vs V1=20 diff=-15 |%7|=1 clash, push DOWN -> 4. vs V1
+    // diff=-16 |%7|=2 OK. vs V2=15 diff=-11 |%7|=4 OK. Candidate=4. Clamp
+    // lowest=min(4,20,15)=4, max_allowed=18. No shift. V3 stored=4.
+    ASSERT_EQ(vp_run(&ss, 3, 5, 0), 4);
+    // V4 natural=30, with V3 actually stored as 4 not 5:
+    // - vs V1=20 diff=10 |%7|=3 OK.
+    // - vs V2=15 diff=15 |%7|=1 clash, push UP -> 31.
+    // - vs V1 diff=11 |%7|=4 OK. vs V2 diff=16 |%7|=2 OK. vs V3=4 diff=27
+    //   |%7|=6 clash! push UP -> 32.
+    // - vs V1 diff=12 |%7|=5 OK. vs V2 diff=17 |%7|=3 OK. vs V3=4 diff=28
+    //   |%7|=0 octave OK. Candidate=32.
+    // Clamp: lowest=min(32, 20, 15, 4)=4. max_allowed=18. 32->25->18.
+    // Final=18.
+    ASSERT_EQ(vp_run(&ss, 4, 30, 0), 18);
+    PASS();
+}
+
+TEST test_P_FUGUE_clamp_staleness_mix() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1 written at clock=0, V2 written at clock=5. V3 called at clock=5
+    // sees V2 as current and V1 as stale. The clamp must compute `lowest`
+    // using only V2, ignoring V1's leftover slot.
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);    // V1 stored at clock=0
+    ASSERT_EQ(vp_run(&ss, 2, 8, 5), 8);    // V2 written at clock=5; vs V1
+                                            // STALE so no avoidance.
+    // V3 natural=22 at clock=5. Avoidance: vs V1 stale (skipped). vs V2=8
+    // diff=14, |%7|=0 octave OK. Candidate=22.
+    // Clamp: lowest = min(22, V2=8) = 8 (V1 stale, ignored). max_allowed=22.
+    // 22 <= 22, no shift. Final=22.
+    //
+    // If staleness check were broken and V1=1 were included, lowest=1,
+    // max_allowed=15, V3 would clamp to 15.
+    ASSERT_EQ(vp_run(&ss, 3, 22, 5), 22);
     PASS();
 }
 
@@ -2309,9 +2354,9 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_out_of_order_voices);
     RUN_TEST(test_P_FUGUE_phantom_zero_state);
     RUN_TEST(test_P_FUGUE_clamp_triggers_on_extreme_drift);
-    RUN_TEST(test_P_FUGUE_clamp_preserves_consonance);
     RUN_TEST(test_P_FUGUE_clamp_below_lowest_voice);
     RUN_TEST(test_P_FUGUE_clamp_pushes_third_voice_down);
-    RUN_TEST(test_P_FUGUE_clamp_idempotent_in_normal_range);
+    RUN_TEST(test_P_FUGUE_clamp_v4_anchors_to_lowest);
+    RUN_TEST(test_P_FUGUE_clamp_staleness_mix);
     RUN_TEST(test_P_FUGUE_clamp_no_lower_voices_noop);
 }
