@@ -2186,6 +2186,36 @@ TEST test_P_FUGUE_clamp_catches_compounded_drift() {
     PASS();
 }
 
+TEST test_P_FUGUE_mode3_composes_with_voice_and_clamp() {
+    // Verifies that the mode transformations (here RETROGRADE-INVERSION)
+    // compose correctly with both the voice-avoidance layer and the
+    // octave clamp. Uses a real subject (not the constant {1,1,1,1}) so
+    // the mode-3 transformation actually changes the candidate.
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    ss_set_pattern_start(&ss, 0, 0);
+    ss_set_pattern_end(&ss, 0, 3);
+    ss_set_pattern_len(&ss, 0, 4);
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, i, subj[i]);
+
+    // V1 mode=3 clock=0: pos=0 reversed to 3 -> subj[3]=7. Invert around
+    // subj[start]=3: 2*3 - 7 = -1. Candidate=-1, no lower voices.
+    ASSERT_EQ(fugue_run(&ss, 1, 1, 0, 3, 0, 0), -1);
+
+    // V2 mode=3 clock=0 transpose=1: candidate = -1 + 1 = 0. vs V1=-1
+    // diff=1 |%7|=1 clash, push UP -> 1. Clamp: lowest=min(1,-1)=-1,
+    // max_allowed=13, no shift. V2=1.
+    ASSERT_EQ(fugue_run(&ss, 2, 1, 1, 3, 0, 0), 1);
+
+    // V3 mode=3 clock=0 transpose=22: candidate = -1 + 22 = 21. vs V1=-1
+    // diff=22 |%7|=1 clash, push UP -> 22. vs V1 diff=23 |%7|=2 OK.
+    // vs V2=1 diff=21 |%7|=0 octave OK. Candidate=22. Clamp: lowest=-1,
+    // max_allowed=13. 22 -> 15 -> 8. V3=8.
+    ASSERT_EQ(fugue_run(&ss, 3, 1, 22, 3, 0, 0), 8);
+    PASS();
+}
+
 TEST test_P_FUGUE_clamp_no_lower_voices_noop() {
     scene_state_t ss;
     vp_setup(&ss);
@@ -2385,5 +2415,6 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_clamp_v4_anchors_to_lowest);
     RUN_TEST(test_P_FUGUE_clamp_staleness_mix);
     RUN_TEST(test_P_FUGUE_clamp_catches_compounded_drift);
+    RUN_TEST(test_P_FUGUE_mode3_composes_with_voice_and_clamp);
     RUN_TEST(test_P_FUGUE_clamp_no_lower_voices_noop);
 }
