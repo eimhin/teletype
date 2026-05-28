@@ -1862,8 +1862,7 @@ TEST test_PN_FUGUE_explicit_bank() {
 // This lets us vary `clock` to test staleness without having to track which
 // subject position each clock value reads.
 static void vp_setup(scene_state_t* ss) {
-    fugue_voice_state_reset();
-    ss_init(ss);
+    ss_init(ss);  // also calls fugue_voice_state_reset()
     ss_set_pattern_start(ss, 0, 0);
     ss_set_pattern_end(ss, 0, 3);
     ss_set_pattern_len(ss, 0, 4);
@@ -1987,7 +1986,6 @@ TEST test_P_FUGUE_compound_dissonance() {
 
 TEST test_PN_FUGUE_bank_isolation() {
     scene_state_t ss;
-    fugue_voice_state_reset();
     ss_init(&ss);
     int16_t subj[4] = { 1, 2, 3, 4 };
     for (int b = 0; b < 2; b++) {

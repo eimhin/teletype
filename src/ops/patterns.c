@@ -1289,8 +1289,8 @@ const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
 // upward drift "always +1" would cause. Unisons and octaves are allowed.
 // Voices are expected to be called in numerical order within a tick; calling
 // out of order produces unreliable avoidance but is not catastrophic. The
-// state table persists across scene loads but is harmless thanks to the
-// staleness check.
+// state table is reset whenever ss_init runs (scene load, INIT op,
+// firmware boot), so it can never leak voice slots from a prior scene.
 
 #define FUGUE_VOICE_COUNT 5 /* slots 0..4; slot 0 unused (voices are 1..4) */
 
