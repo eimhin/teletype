@@ -319,3 +319,170 @@ P.MAP: * 2 I  => double each cell in the active pattern
 ["PN.MAP"]
 prototype = "PN.MAP x: ..."
 short = "apply the 'function' to each value in pattern `x`, `I` takes each pattern value"
+
+["P.MOTIF"]
+prototype = "P.MOTIF length variation transposition"
+short = "fill the working pattern with a generated diatonic motif and variations"
+description = """Generate a short melodic motif and write it, repeated with variations, across the working pattern's `START..END` window. Output values are diatonic scale degrees (`1-7` = one octave), intended to be quantised downstream with `N.S` or `QT.S`.
+
+`length` is the motif length in cells, clamped to `2-4`. `variation` (wrapped to `0-7`) selects the transformation applied to each statement after the first:
+
+- `0` EXACT — repeat unchanged
+- `1` INVERT — mirror intervals
+- `2` RETROGRADE — reverse
+- `3` ALTERNATE — alternate prime and inverted
+- `4` ORNAMENT — nudge one random note
+- `5` COMPRESS — halve intervals
+- `6` EXPAND — double intervals
+- `7` ROTATE — rotate the motif
+
+`transposition` is a signed scale-degree shift added per successive statement. The motif is drawn from the pattern random generator (see `P.SEED`), so the same seed reproduces the same motif. Does not return a value."""
+
+["PN.MOTIF"]
+prototype = "PN.MOTIF x length variation transposition"
+short = "fill pattern `x` with a generated diatonic motif and variations"
+description = "As `P.MOTIF`, but operates on pattern `x` rather than the working pattern."
+
+["P.CP"]
+prototype = "P.CP rule offset"
+short = "return a diatonic counterpoint degree against the value at the current index"
+description = """Read a counterpoint voice against the working pattern's value at the current index (`P.I`), using the whole `START..END` window for melodic context. Input and output are diatonic scale degrees, to pair with `P.MOTIF` and `N.S` / `QT.S`. Stateless: does not advance the playhead or modify the pattern.
+
+`rule` (wrapped to `0-7`) selects the counterpoint style:
+
+- `0` BALANCED
+- `1` CONTRARY — move opposite to the melody
+- `2` PARALLEL — favour 3rds and 6ths above
+- `3` BASS — stay below, prefer 5ths and octaves
+- `4` MIRROR — invert around an axis
+- `5` OBLIQUE — pull toward the tonic octave
+- `6` CANON — echo an earlier point in the window
+- `7` FOLLOW — move in the same direction as the melody
+
+`offset` is a signed scale-degree shift added to the result."""
+
+["PN.CP"]
+prototype = "PN.CP x rule offset"
+short = "return a diatonic counterpoint degree against the current value of pattern `x`"
+description = "As `P.CP`, but reads pattern `x` rather than the working pattern."
+
+["P.FUGUE"]
+prototype = "P.FUGUE voice division transpose mode phase clock"
+short = "read the working pattern as a fugal voice; return one scale degree for the given clock"
+description = """Read the working pattern's `START..END` window as a fugal subject and return one diatonic scale degree determined purely by `clock` (the caller supplies and increments it, usually `T`). Stateless with respect to the pattern: never writes the pattern or advances `P.I`. Multiple calls with different args produce a multi-voice fugal texture.
+
+- `division` — ticks per note; negative reverses direction. `0` returns `0`.
+- `transpose` — signed scale-degree offset added to the result.
+- `mode` — subject transformation (out of range coerces to PRIME): `0` PRIME, `1` INVERSION (mirror around the subject's first note), `2` RETROGRADE, `3` RETROGRADE-INVERSION.
+- `phase` — position offset within the subject; enables stretto. Wraps modulo subject length.
+- `clock` — master time reference; any signed value.
+
+`voice` (clamped `0-4`) enables optional inter-voice clash avoidance:
+
+- `0` — stateless; behaves purely as above.
+- `1-4` — record this voice's result in a per-bank table and, for voices `2-4`, nudge the result by a scale degree to avoid 2nds and 7ths against lower-numbered voices recorded at the same `clock`. Adjustment is bidirectional, and the result is octave-clamped to within two octaves of the lowest tracked voice. Call voices in ascending numerical order within a tick for reliable avoidance."""
+
+["PN.FUGUE"]
+prototype = "PN.FUGUE x voice division transpose mode phase clock"
+short = "read pattern `x` as a fugal voice; return one scale degree for the given clock"
+description = "As `P.FUGUE`, but reads pattern `x`, and the voice-avoidance state table is keyed per bank so independent fugues on different patterns do not interfere."
+
+["P.MODE"]
+prototype = "P.MODE"
+prototype_set = "P.MODE x"
+short = "get/set the playback mode used by `P.STEP` for the working pattern"
+description = """Get or set how `P.STEP` traverses the working pattern: `0` LINEAR, `1` PINGPONG, `2` PENDULUM, `3` JUMP (random index), `4` RANDOM, `5` BROWNIAN (drunken walk clamped at the window ends). Values outside the valid range are clamped. Pure configuration — setting the mode never advances the playhead."""
+
+["PN.MODE"]
+prototype = "PN.MODE x"
+prototype_set = "PN.MODE x y"
+short = "get/set the playback mode used by `PN.STEP` for pattern `x`"
+description = "As `P.MODE`, but for pattern `x`."
+
+["P.DIR"]
+prototype = "P.DIR"
+prototype_set = "P.DIR x"
+short = "get/set the base playback direction used by `P.STEP` for the working pattern"
+description = "Get or set the base travel direction for `P.STEP`: `0` forward, non-zero reverse. Setting it also re-seeds the travel direction so a mid-bounce change takes effect on the next `P.STEP`."
+
+["PN.DIR"]
+prototype = "PN.DIR x"
+prototype_set = "PN.DIR x y"
+short = "get/set the base playback direction used by `PN.STEP` for pattern `x`"
+description = "As `P.DIR`, but for pattern `x`."
+
+["P.STRIDE"]
+prototype = "P.STRIDE"
+prototype_set = "P.STRIDE x"
+short = "get/set the step size `P.STEP` advances by for the working pattern"
+description = "Get or set how many indices `P.STEP` moves per advance, clamped to `1-127`."
+
+["PN.STRIDE"]
+prototype = "PN.STRIDE x"
+prototype_set = "PN.STRIDE x y"
+short = "get/set the step size `PN.STEP` advances by for pattern `x`"
+description = "As `P.STRIDE`, but for pattern `x`."
+
+["P.STEP"]
+prototype = "P.STEP"
+short = "advance the working pattern one tick and return the value at the new index"
+description = """Advance the working pattern's playhead by one tick, honouring the cell durations (`P.D`), playback mode (`P.MODE`), direction (`P.DIR`) and stride (`P.STRIDE`), then return the value at the resulting index. The playhead only moves to a new cell once the current cell's duration has elapsed; until then `P.STEP` returns the same value (dwelling)."""
+
+["PN.STEP"]
+prototype = "PN.STEP x"
+short = "advance pattern `x` one tick and return the value at the new index"
+description = "As `P.STEP`, but advances pattern `x`."
+
+["P.STEP.NEW"]
+prototype = "P.STEP.NEW"
+short = "return 1 if the last `P.STEP` entered a new cell, else 0 (does not advance)"
+description = "Passive query: returns `1` if the most recent `P.STEP` on the working pattern just moved to a new cell (including the first step after init or a `P.I` reset), else `0`. Does not advance the playhead."
+
+["PN.STEP.NEW"]
+prototype = "PN.STEP.NEW x"
+short = "return 1 if the last `PN.STEP` on pattern `x` entered a new cell, else 0"
+description = "As `P.STEP.NEW`, but queries pattern `x`."
+
+["P.STEP?"]
+prototype = "P.STEP?"
+short = "advance the working pattern one tick; return 1 if it entered a new cell, else 0"
+description = "Advance the working pattern like `P.STEP`, but return the just-advanced flag instead of the cell value. Lets a script gate an action on stage changes in a single op, e.g. `IF P.STEP?: SCRIPT 2`."
+
+["PN.STEP?"]
+prototype = "PN.STEP? x"
+short = "advance pattern `x` one tick; return 1 if it entered a new cell, else 0"
+description = "As `P.STEP?`, but advances pattern `x`."
+
+["P.D"]
+prototype = "P.D x"
+prototype_set = "P.D x d"
+short = "get/set the dwell duration (in ticks) of cell `x` of the working pattern"
+description = "Get or set the per-cell dwell duration used by `P.STEP`, in ticks. Durations below `1` are clamped to `1`, so a cell can never freeze the sequencer."
+
+["PN.D"]
+prototype = "PN.D x y"
+prototype_set = "PN.D x y d"
+short = "get/set the dwell duration (in ticks) of cell `y` of pattern `x`"
+description = "As `P.D`, but for pattern `x`."
+
+["P.D.HERE"]
+prototype = "P.D.HERE"
+prototype_set = "P.D.HERE d"
+short = "get/set the dwell duration of the working pattern's current cell"
+description = "As `P.D`, but operates on the cell at the current index (`P.I`)."
+
+["PN.D.HERE"]
+prototype = "PN.D.HERE x"
+prototype_set = "PN.D.HERE x d"
+short = "get/set the dwell duration of the current cell of pattern `x`"
+description = "As `P.D.HERE`, but for pattern `x`."
+
+["P.D.RND"]
+prototype = "P.D.RND lo hi"
+short = "randomise every cell duration in the working pattern's window to between `lo` and `hi`"
+description = "Set each cell's dwell duration in the `START..END` window to a random value between `lo` and `hi` (inclusive). Both bounds are clamped to at least `1` and swapped if `lo > hi`, so a freeze-the-sequencer `0` is impossible. Does not return a value."
+
+["PN.D.RND"]
+prototype = "PN.D.RND x lo hi"
+short = "randomise every cell duration in pattern `x`'s window to between `lo` and `hi`"
+description = "As `P.D.RND`, but for pattern `x`."
