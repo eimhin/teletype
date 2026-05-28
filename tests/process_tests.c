@@ -2160,6 +2160,32 @@ TEST test_P_FUGUE_clamp_staleness_mix() {
     PASS();
 }
 
+TEST test_P_FUGUE_clamp_catches_compounded_drift() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // Realistic cascading scenario: every voice's transpose is in the
+    // normal fugal range (no single voice asks for an extreme interval),
+    // but successive bumps compound upward and the *combined* drift
+    // exceeds +14 from V1. Locks down that the clamp catches organic
+    // drift, not just single-voice extremes.
+    //
+    // V1=1 (anchor).
+    // V2=3, V3=5: spaced thirds above V1, all consonant, no bumps.
+    // V4 natural=16 (two octaves above V1 + 1 — a natural register
+    // choice for a top voice).
+    //   - vs V1 diff=15 |%7|=1 clash, push UP -> 17.
+    //   - vs V1 diff=16 |%7|=2 OK. vs V2=3 diff=14 octave OK.
+    //     vs V3=5 diff=12 |%7|=5 OK. Candidate=17.
+    // Without the clamp V4 emerges at 17 (16 degrees above V1).
+    // Clamp: lowest=min(17,1,3,5)=1, max_allowed=15. 17 -> 10.
+    // Final V4=10 (9 degrees above V1, well within the 2-octave budget).
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 3, 0), 3);
+    ASSERT_EQ(vp_run(&ss, 3, 5, 0), 5);
+    ASSERT_EQ(vp_run(&ss, 4, 16, 0), 10);
+    PASS();
+}
+
 TEST test_P_FUGUE_clamp_no_lower_voices_noop() {
     scene_state_t ss;
     vp_setup(&ss);
@@ -2358,5 +2384,6 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_clamp_pushes_third_voice_down);
     RUN_TEST(test_P_FUGUE_clamp_v4_anchors_to_lowest);
     RUN_TEST(test_P_FUGUE_clamp_staleness_mix);
+    RUN_TEST(test_P_FUGUE_clamp_catches_compounded_drift);
     RUN_TEST(test_P_FUGUE_clamp_no_lower_voices_noop);
 }
