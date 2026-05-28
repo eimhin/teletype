@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "helpers.h"
+#include "ops/patterns.h"
 #include "teletype_io.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -11,6 +12,7 @@
 
 void ss_init(scene_state_t *ss) {
     ss->initializing = true;
+    fugue_voice_state_reset();
     ss_cal_init(ss);
     ss_variables_init(ss);
     ss_patterns_init(ss);

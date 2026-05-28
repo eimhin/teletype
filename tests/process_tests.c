@@ -2007,15 +2007,61 @@ TEST test_PN_FUGUE_bank_isolation() {
 TEST test_P_FUGUE_voice_clamps() {
     scene_state_t ss;
     vp_setup(&ss);
-    // voice=5 clamps to 4. Without other voices, no adjustment occurs but
-    // the state table entry for slot 4 should be written.
-    ASSERT_EQ(fugue_run(&ss, 5, 1, 2, 0, 0, 0), 3);
-    // voice=-1 clamps to 0, fully stateless: no write to slot 0.
-    // Confirm by checking that voice 2 still sees no constraints (no lower
-    // voice has written for this clock).
+    // voice=5 clamps to 4. Discriminating check: pre-populate slot 4 with
+    // a value that *would* trigger a clash if voice=5 were not clamped (an
+    // unclamped voice=5 would iterate v=1..4 and inspect slot 4). With the
+    // clamp, the loop terminates at v < 4 and slot 4 is invisible.
+    //
+    // Pre-populate slot 4 with V4 candidate=3 (no lower voices written yet,
+    // so V4 stores cleanly).
+    ASSERT_EQ(vp_run(&ss, 4, 3, 0), 3);
+    // Now call with voice=5, natural=4. Without clamp: vs slot4=3 diff=1
+    // clash, push up to 5. With clamp: slot 4 not inspected, returns 4.
+    ASSERT_EQ(vp_run(&ss, 5, 4, 0), 4);
+
+    // voice=-1 clamps to 0 (fully stateless: no write to slot 0).
     fugue_voice_state_reset();
     (void)fugue_run(&ss, -1, 1, 2, 0, 0, 0);
     ASSERT_EQ(vp_run(&ss, 2, 4, 0), 4);
+    PASS();
+}
+
+TEST test_P_FUGUE_safety_terminates() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // V1=1, V2=4 (consonant 3rd, both stored as-is). V3 natural=3 sits
+    // between them: vs V1 diff=2 OK; vs V2 diff=-1 clash, push DOWN -> 2;
+    // then vs V1 diff=1 clash, push UP -> 3; then vs V2 diff=-1 clash again.
+    // Oscillates between 2 and 3. Without the safety counter this would
+    // loop forever; the test passing at all (within finite time) proves
+    // the counter is present.
+    ASSERT_EQ(vp_run(&ss, 1, 1, 0), 1);
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 4);
+    int16_t v3 = vp_run(&ss, 3, 3, 0);
+    ASSERT(v3 == 2 || v3 == 3);
+    PASS();
+}
+
+TEST test_P_FUGUE_out_of_order_voices() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // Calling V2 before V1 at the same clock is documented as "unreliable
+    // but not catastrophic". V2's clash check finds slot 1 invalid (not yet
+    // written) and ignores it — natural value passes through unchanged.
+    // V1 then runs and just writes its slot. No crash, no infinite loop.
+    ASSERT_EQ(vp_run(&ss, 2, 4, 0), 4);  // V1 not yet written -> no clash
+    ASSERT_EQ(vp_run(&ss, 1, 3, 0), 3);  // V1 writes itself, no checks
+    PASS();
+}
+
+TEST test_P_FUGUE_phantom_zero_state() {
+    scene_state_t ss;
+    vp_setup(&ss);
+    // Post-reset, all slots have last_clock=0 and valid=0. If the staleness
+    // check relied on last_clock alone (ignoring valid), V2's check at
+    // clock=0 with natural=1 would compare against phantom note=0 (diff=1,
+    // clash) and erroneously push up to 2. The `valid` flag must guard.
+    ASSERT_EQ(vp_run(&ss, 2, 1, 0), 1);
     PASS();
 }
 
@@ -2072,7 +2118,8 @@ TEST test_P_FUGUE_no_upward_drift() {
     }
     // Under bidirectional, V2 outputs alternate 6/2 (push away from V1=4 in
     // each direction). Mean exactly matches natural mean. Under "always +1"
-    // V2 would output 6/4, drifting +50 over 100 calls.
+    // V2 would output 6/4 (each tick +1 above natural), drifting +100 over
+    // 100 calls.
     ASSERT_EQ(actual_sum, natural_sum);
     PASS();
 }
@@ -2187,4 +2234,7 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_bidirectional_above);
     RUN_TEST(test_P_FUGUE_bidirectional_below);
     RUN_TEST(test_P_FUGUE_no_upward_drift);
+    RUN_TEST(test_P_FUGUE_safety_terminates);
+    RUN_TEST(test_P_FUGUE_out_of_order_voices);
+    RUN_TEST(test_P_FUGUE_phantom_zero_state);
 }
