@@ -301,6 +301,9 @@
         "POLY"        => { MATCH_OP(E_OP_POLY); };
         "POLY.X"      => { MATCH_OP(E_OP_POLY_X); };
         "POLY.A"      => { MATCH_OP(E_OP_POLY_A); };
+        "ERD"         => { MATCH_OP(E_OP_ERD); };
+        "ERD.W"       => { MATCH_OP(E_OP_ERD_W); };
+        "BB"          => { MATCH_OP(E_OP_BB); };
         "BPM"         => { MATCH_OP(E_OP_BPM);; };
         "|"           => { MATCH_OP(E_OP_BIT_OR);; };
         "&"           => { MATCH_OP(E_OP_BIT_AND);; };

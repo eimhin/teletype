@@ -159,6 +159,12 @@ static void op_POLY_X_get(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
 static void op_POLY_A_get(const void *data, scene_state_t *ss, exec_state_t *es,
                           command_state_t *cs);
+static void op_ERD_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                       command_state_t *cs);
+static void op_ERD_W_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                         command_state_t *cs);
+static void op_BB_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                      command_state_t *cs);
 static void op_BPM_get(const void *data, scene_state_t *ss, exec_state_t *es,
                        command_state_t *cs);
 static void op_BIT_OR_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -270,6 +276,9 @@ const tele_op_t op_CA_SEED = MAKE_GET_OP(CA.SEED, op_CA_SEED_get, 1, false);
 const tele_op_t op_POLY  = MAKE_GET_OP(POLY    , op_POLY_get    , 4, true);
 const tele_op_t op_POLY_X = MAKE_GET_OP(POLY.X , op_POLY_X_get  , 4, true);
 const tele_op_t op_POLY_A = MAKE_GET_OP(POLY.A , op_POLY_A_get  , 4, true);
+const tele_op_t op_ERD   = MAKE_GET_OP(ERD     , op_ERD_get     , 4, true);
+const tele_op_t op_ERD_W = MAKE_GET_OP(ERD.W   , op_ERD_W_get   , 4, true);
+const tele_op_t op_BB    = MAKE_GET_OP(BB      , op_BB_get      , 2, true);
 const tele_op_t op_BPM   = MAKE_GET_OP(BPM     , op_BPM_get     , 1, true);
 const tele_op_t op_BIT_OR  = MAKE_GET_OP(|, op_BIT_OR_get  , 2, true);
 const tele_op_t op_BIT_AND = MAKE_GET_OP(&, op_BIT_AND_get, 2, true);
@@ -1216,6 +1225,96 @@ static void op_POLY_A_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
     int16_t fill = cs_pop(cs);
     int16_t step = cs_pop(cs);
     cs_push(cs, poly_voice(a, fill, step) & poly_voice(b, fill, step));
+}
+
+// ERD / ERD.W: a Euclidean rhythm whose fill is animated, then emitted via the
+// shared clamped euclidean helper (poly_voice). ERD breathes the fill with a
+// slow triangle; ERD.W jumps it to a new pseudo-random level every h steps.
+
+// Triangle fill 1 -> f -> 1 over a breath period of b steps. f is capped at 32
+// (euclidean's max length) so the integer math can't overflow.
+static int16_t erd_tri_fill(int16_t f, int16_t b, int16_t step) {
+    if (f < 1) f = 1;
+    if (f > 32) f = 32;
+    if (b < 2) return f;  // too short to breathe -> hold at peak
+    int16_t phase = step % b;
+    if (phase < 0) phase += b;
+    int16_t half = b / 2;  // b >= 2 so half >= 1
+    int16_t t = phase <= half ? phase : (int16_t)(b - phase);  // 0..half..0
+    return (int16_t)(1 + ((int32_t)(f - 1) * t) / half);       // 1..f..1
+}
+
+// Deterministic small hash (Knuth multiplicative) so ERD.W is pure/resettable.
+static uint16_t erd_hash(uint32_t n) {
+    return (uint16_t)((n * 2654435761u) >> 16);
+}
+
+// Sample-and-hold random fill in [1, f], constant within each h-step block.
+static int16_t erd_wander_fill(int16_t f, int16_t h, int16_t step) {
+    if (f < 1) f = 1;
+    if (f > 32) f = 32;
+    if (h < 1) h = 1;
+    int32_t block = (int32_t)step / h;
+    if (step < 0 && step % h != 0) block -= 1;  // floor division
+    return (int16_t)(1 + (erd_hash((uint32_t)block) % (uint16_t)f));
+}
+
+static void op_ERD_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                       exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t f = cs_pop(cs);
+    int16_t l = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    cs_push(cs, poly_voice(l, erd_tri_fill(f, b, step), step));
+}
+
+static void op_ERD_W_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                         exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t f = cs_pop(cs);
+    int16_t l = cs_pop(cs);
+    int16_t h = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    cs_push(cs, poly_voice(l, erd_wander_fill(f, h, step), step));
+}
+
+// BB: bytebeat rhythm. seed selects a bitwise formula; the gate is the rising
+// edge of one bit of formula(step), so onsets are always spaced (a hit at s
+// forces bit(s)=1, which is the "previous" sample for s+1, so s+1 cannot also
+// be a rising edge -> never two consecutive hits).
+#define BB_FORMULA_COUNT 8
+#define BB_SHIFT \
+    6  // which bit of the byte to read (tuned for step-rate density)
+#define BB_STRIDE 53  // step is scaled into bytebeat's audio-rate domain
+
+static uint32_t bytebeat(int16_t seed, uint32_t t) {
+    int16_t s = seed % BB_FORMULA_COUNT;
+    if (s < 0) s += BB_FORMULA_COUNT;
+    uint32_t v;
+    switch (s) {
+        case 0: v = t & (t >> 3); break;
+        case 1: v = t & (t >> 4); break;
+        case 2: v = (t * 5) & (t >> 4); break;
+        case 3: v = t ^ (t >> 2); break;
+        case 4: v = (t >> 2) * (t >> 3); break;
+        case 5: v = t * (((t >> 3) | (t >> 5)) & 5); break;
+        case 6: v = (t & (t >> 5)) | (t >> 3); break;
+        default: v = t | (t >> 2) | (t >> 4); break;
+    }
+    return v & 0xFF;
+}
+
+static int16_t bb_bit(int16_t seed, int16_t step) {
+    return (int16_t)((bytebeat(seed, (uint32_t)step * BB_STRIDE) >> BB_SHIFT) &
+                     1);
+}
+
+static void op_BB_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                      exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t seed = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    int16_t now = bb_bit(seed, step);
+    int16_t prev = bb_bit(seed, (int16_t)(step - 1));
+    cs_push(cs, now && !prev);
 }
 
 static void op_DR_T_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),

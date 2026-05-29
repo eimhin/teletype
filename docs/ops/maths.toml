@@ -413,6 +413,45 @@ description = """
 `POLY.A` is the AND of the two Euclidean voices used by `POLY` (same `a b f s` arguments). It fires only when *both* voices hit the same step -- giving sparse accents that mark the moments of alignment. Good as a rare downbeat layer beneath `POLY` / `POLY.X`. With `f = 1` (single pulses) this happens exactly every `LCM(a, b)` steps; with a higher fill the two patterns can also coincide on other aligned steps.
 """
 
+[ERD]
+prototype = "ERD f l b s"
+short = "Breathing Euclidean: a Euclidean rhythm of length `l` whose fill swells `1 -> f -> 1` (triangle) over a breath of `b` steps, read at step `s`. Returns `0` or `1`"
+description = """
+`ERD` is a Euclidean rhythm with a *breathing* density: the fill ramps smoothly up from 1 to `f` and back down over `b` steps, so the rhythm thickens and thins on its own -- the slow build-and-release at the heart of ambient. It is a pure function of `s` (like `ER`), so it is resettable and supports many independent instances.
+
+ - `f` is the peak fill (density at the top of the swell)
+ - `l` is the Euclidean length (`1-32`)
+ - `b` is the breath period in steps (one full swell up and back); `b < 2` disables breathing, giving a plain `ER f l s`
+ - `s` is the step
+
+At `s = 0` the fill is 1 and swells to `f` at the midpoint of each breath. Keep `f` well below `l` for sparse, airy results. Out-of-range arguments clamp to a musical result rather than falling silent. See `ERD.W` for a randomly-wandering density instead of a smooth swell.
+"""
+
+["ERD.W"]
+prototype = "ERD.W f l h s"
+short = "Wandering Euclidean: like `ERD`, but the fill jumps to a new random level in `1..f` every `h` steps and holds. Returns `0` or `1`"
+description = """
+`ERD.W` is a Euclidean rhythm whose fill **wanders**: every `h` steps it jumps to a new pseudo-random density in `1..f` and holds it until the next jump (sample-and-hold). This gives an organic, never-quite-repeating drift rather than the smooth swell of `ERD`. It is deterministic (the random level is derived from the step), so it is pure and resettable.
+
+ - `f` is the maximum fill, `l` the Euclidean length (`1-32`)
+ - `h` is the hold length in steps between density changes
+ - `s` is the step
+
+Out-of-range arguments clamp to a musical result. Use `ERD` for a predictable swell instead.
+"""
+
+[BB]
+prototype = "BB seed s"
+short = "Bytebeat rhythm: `seed` selects a bitwise formula; returns a spaced trigger on the rising edge of the formula at step `s`. Returns `0` or `1`"
+description = """
+`BB` turns a "bytebeat" (a tiny bitwise formula of time) into a rhythm. `seed` picks one of several built-in formulas, each with its own character and density, giving lots of structured-but-quirky variety from a single number. The output is the **rising edge** of the formula, so triggers are always spaced -- there are never two hits on consecutive steps. It is a pure function of `s`, so it is resettable.
+
+ - `seed` selects the formula (wraps, so any integer is valid)
+ - `s` is the step
+
+Densities vary by seed from very sparse to busy. `BB` is a pure trigger source -- combine it with the other rhythm ops to layer textures.
+"""
+
 [BPM]
 prototype = "BPM x"
 short = "milliseconds per beat in BPM `x`"

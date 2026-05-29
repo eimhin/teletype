@@ -3021,6 +3021,158 @@ TEST test_POLY_clamping() {
     PASS();
 }
 
+// ---- ERD / ERD.W (breathing Euclidean) + BB (bytebeat) --------------------
+
+static int16_t erd(scene_state_t* ss, int f, int l, int b, int s) {
+    char line[48];
+    snprintf(line, sizeof(line), "ERD %d %d %d %d", f, l, b, s);
+    return ca_exec(ss, line).value;
+}
+
+static int16_t erd_w(scene_state_t* ss, int f, int l, int h, int s) {
+    char line[48];
+    snprintf(line, sizeof(line), "ERD.W %d %d %d %d", f, l, h, s);
+    return ca_exec(ss, line).value;
+}
+
+static int16_t bb(scene_state_t* ss, int seed, int s) {
+    char line[32];
+    snprintf(line, sizeof(line), "BB %d %d", seed, s);
+    return ca_exec(ss, line).value;
+}
+
+// Reference reimplementations of the fill animators, to cross-check the ops.
+static int ref_tri_fill(int f, int b, int s) {
+    if (f < 1) f = 1;
+    if (f > 32) f = 32;
+    if (b < 2) return f;
+    int phase = s % b;
+    if (phase < 0) phase += b;
+    int half = b / 2;
+    int t = phase <= half ? phase : b - phase;
+    return 1 + (f - 1) * t / half;
+}
+
+static int ref_wander_fill(int f, int h, int s) {
+    if (f < 1) f = 1;
+    if (f > 32) f = 32;
+    if (h < 1) h = 1;
+    int block = s / h;
+    if (s < 0 && s % h != 0) block -= 1;
+    uint16_t hash = (uint16_t)(((uint32_t)block * 2654435761u) >> 16);
+    return 1 + (hash % (uint16_t)f);
+}
+
+TEST test_ERD_parse_and_has_value() {
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    ASSERT_EQ(parse("ERD 3 16 64 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("ERD.W 4 16 8 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("BB 5 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    scene_state_t ss;
+    ss_init(&ss);
+    ASSERT_EQ(ca_exec(&ss, "ERD 3 16 64 0").has_value, true);
+    ASSERT_EQ(ca_exec(&ss, "ERD.W 4 16 8 0").has_value, true);
+    ASSERT_EQ(ca_exec(&ss, "BB 5 0").has_value, true);
+    PASS();
+}
+
+TEST test_ERD_swell() {
+    // Cross-check the triangle-breathing fill against euclidean() over a grid,
+    // plus the independently-reasoned breath endpoints.
+    scene_state_t ss;
+    ss_init(&ss);
+    int fs[2] = { 3, 6 };
+    int ls[2] = { 8, 16 };
+    int bs[2] = { 8, 20 };
+    for (int fi = 0; fi < 2; fi++)
+        for (int li = 0; li < 2; li++)
+            for (int bi = 0; bi < 2; bi++)
+                for (int s = 0; s < 40; s++) {
+                    int f = fs[fi], l = ls[li], b = bs[bi];
+                    ASSERT_EQ(erd(&ss, f, l, b, s),
+                              euclidean(ref_tri_fill(f, b, s), l, s));
+                }
+    // endpoints: s=0 -> fill 1 (euclidean always hits step 0);
+    // s=b/2 -> fill peaks at f.
+    ASSERT_EQ(erd(&ss, 6, 16, 16, 0), 1);
+    ASSERT_EQ(erd(&ss, 6, 16, 16, 8), euclidean(6, 16, 8));
+    // b < 2 -> no breath, equals plain ER f l s
+    for (int s = 0; s < 16; s++) {
+        ASSERT_EQ(erd(&ss, 3, 8, 1, s), euclidean(3, 8, s));
+    }
+    PASS();
+}
+
+TEST test_ERD_W_wander() {
+    // Cross-check the sample-and-hold fill against euclidean(), confirm the
+    // fill is constant within each h-step block, and that it is deterministic.
+    scene_state_t ss;
+    ss_init(&ss);
+    int fs[2] = { 4, 7 };
+    int hs[2] = { 4, 8 };
+    for (int fi = 0; fi < 2; fi++)
+        for (int hi = 0; hi < 2; hi++)
+            for (int s = 0; s < 48; s++) {
+                int f = fs[fi], h = hs[hi];
+                int16_t v = erd_w(&ss, f, 16, h, s);
+                ASSERT_EQ(v, euclidean(ref_wander_fill(f, h, s), 16, s));
+                ASSERT_EQ(erd_w(&ss, f, 16, h, s), v);  // deterministic
+            }
+    // block constancy: the implied fill is identical across a whole h-block.
+    for (int s = 0; s < 8; s++) {
+        ASSERT_EQ(ref_wander_fill(5, 8, s), ref_wander_fill(5, 8, 0));
+    }
+    PASS();
+}
+
+TEST test_ERD_clamping() {
+    // Out-of-range args clamp to musical results, never silent.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = 0; s < 20; s++) {
+        ASSERT_EQ(erd(&ss, 3, 0, 8, s), 1);    // len < 1 -> 1 -> every step
+        ASSERT_EQ(erd_w(&ss, 3, 0, 8, s), 1);  // len < 1 -> 1 -> every step
+    }
+    PASS();
+}
+
+TEST test_BB_no_cluster() {
+    // Rising-edge output can never produce two adjacent hits, and is always
+    // 0/1. This is the no-clustering guarantee.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int seed = 0; seed < 8; seed++) {
+        int16_t prev = bb(&ss, seed, 0);
+        ASSERT(prev == 0 || prev == 1);
+        for (int s = 1; s < 200; s++) {
+            int16_t cur = bb(&ss, seed, s);
+            ASSERT(cur == 0 || cur == 1);
+            ASSERT_FALSE(cur == 1 && prev == 1);  // never adjacent
+            prev = cur;
+        }
+    }
+    PASS();
+}
+
+TEST test_BB_determinism_and_seed_wrap() {
+    // Pure function; seed wraps mod the formula count (8).
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = 0; s < 64; s++) {
+        for (int seed = 0; seed < 8; seed++) {
+            int16_t v = bb(&ss, seed, s);
+            ASSERT_EQ(bb(&ss, seed, s), v);      // deterministic
+            ASSERT_EQ(bb(&ss, seed + 8, s), v);  // seed wraps mod 8
+            ASSERT_EQ(bb(&ss, seed + 16, s), v);
+        }
+    }
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -3186,4 +3338,10 @@ SUITE(process_suite) {
     RUN_TEST(test_POLY_has_value);
     RUN_TEST(test_POLY_negative_args);
     RUN_TEST(test_POLY_clamping);
+    RUN_TEST(test_ERD_parse_and_has_value);
+    RUN_TEST(test_ERD_swell);
+    RUN_TEST(test_ERD_W_wander);
+    RUN_TEST(test_ERD_clamping);
+    RUN_TEST(test_BB_no_cluster);
+    RUN_TEST(test_BB_determinism_and_seed_wrap);
 }
