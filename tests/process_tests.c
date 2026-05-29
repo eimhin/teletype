@@ -2593,6 +2593,151 @@ TEST test_PN_ORN_bank_clamp() {
     PASS();
 }
 
+// ---- CA / CA.X / CA.SEED (cellular-automaton rhythm) ----------------------
+
+// Run any single command line through the parse/validate/process path and
+// return its pushed value (0 for the no-return CA.SEED).
+static int16_t ca_line(scene_state_t* ss, const char* line) {
+    exec_state_t es;
+    es_init(&es);
+    es_push(&es);
+    es_variables(&es)->script_number = 0;
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    parse(line, &cmd, error_msg);
+    validate(&cmd, error_msg);
+    process_result_t r = process_command(ss, &es, &cmd);
+    return r.value;
+}
+
+static int16_t ca(scene_state_t* ss, int rule) {
+    char line[16];
+    snprintf(line, sizeof(line), "CA %d", rule);
+    return ca_line(ss, line);
+}
+
+static int16_t ca_x(scene_state_t* ss, int off) {
+    char line[16];
+    snprintf(line, sizeof(line), "CA.X %d", off);
+    return ca_line(ss, line);
+}
+
+static void ca_seed(scene_state_t* ss, int v) {
+    char line[16];
+    snprintf(line, sizeof(line), "CA.SEED %d", v);
+    ca_line(ss, line);
+}
+
+TEST test_CA_determinism() {
+    // Same rule from the same (init) seed yields an identical gate stream.
+    scene_state_t a, b;
+    ss_init(&a);
+    ss_init(&b);
+    for (int i = 0; i < 32; i++) { ASSERT_EQ(ca(&a, 90), ca(&b, 90)); }
+    PASS();
+}
+
+TEST test_CA_rule204_identity() {
+    // Rule 204 copies the centre cell: the row never changes. Seeded with a
+    // single centre cell, CA returns 1 forever and neighbours stay 0.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int i = 0; i < 8; i++) { ASSERT_EQ(ca(&ss, 204), 1); }
+    ASSERT_EQ(ca_x(&ss, 0), 1);
+    ASSERT_EQ(ca_x(&ss, 1), 0);
+    ASSERT_EQ(ca_x(&ss, -1), 0);
+    PASS();
+}
+
+TEST test_CA_rule255_saturates() {
+    // Rule 255 maps every neighbourhood to 1: after one step the whole row is
+    // filled, so the centre and every other cell read 1.
+    scene_state_t ss;
+    ss_init(&ss);
+    ASSERT_EQ(ca(&ss, 255), 1);
+    ASSERT_EQ(ca_x(&ss, 0), 1);
+    ASSERT_EQ(ca_x(&ss, 5), 1);
+    ASSERT_EQ(ca_x(&ss, -7), 1);
+    PASS();
+}
+
+TEST test_CA_rule0_autorevive() {
+    // Rule 0 maps every neighbourhood to 0, so the row would die to silence.
+    // Auto-revive replants a single centre cell, so CA returns 1 and only the
+    // centre is alive -- every step.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int i = 0; i < 4; i++) {
+        ASSERT_EQ(ca(&ss, 0), 1);
+        ASSERT_EQ(ca_x(&ss, 1), 0);
+        ASSERT_EQ(ca_x(&ss, -1), 0);
+    }
+    PASS();
+}
+
+TEST test_CA_X_no_advance_and_wrap() {
+    // CA.X reads the current row without advancing it, and its offset wraps
+    // mod 32. After one rule-90 step from the centre cell the row is
+    // {..,15:1, 16:0, 17:1,..}; repeated CA.X reads are stable.
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t centre = ca(&ss, 90);  // advance once
+    ASSERT_EQ(centre, 0);          // rule 90 = left XOR right: centre clears
+    ASSERT_EQ(ca_x(&ss, 0), 0);
+    ASSERT_EQ(ca_x(&ss, 0), 0);  // reading does not change anything
+    ASSERT_EQ(ca_x(&ss, 1), 1);
+    ASSERT_EQ(ca_x(&ss, -1), 1);
+    ASSERT_EQ(ca_x(&ss, 32), ca_x(&ss, 0));   // +32 wraps to 0
+    ASSERT_EQ(ca_x(&ss, -32), ca_x(&ss, 0));  // -32 wraps to 0
+    PASS();
+}
+
+TEST test_CA_X_does_not_advance_stream() {
+    // Interleaving CA.X reads must not perturb the CA gate stream.
+    scene_state_t a, b;
+    ss_init(&a);
+    ss_init(&b);
+    for (int i = 0; i < 32; i++) {
+        int16_t va = ca(&a, 110);
+        ca_x(&b, 3);
+        ca_x(&b, -2);
+        ASSERT_EQ(va, ca(&b, 110));
+    }
+    PASS();
+}
+
+TEST test_CA_SEED() {
+    // CA.SEED 0 plants the canonical single centre cell.
+    scene_state_t ss;
+    ss_init(&ss);
+    ca(&ss, 110);  // diverge first
+    ca(&ss, 110);
+    ca_seed(&ss, 0);
+    ASSERT_EQ(ca_x(&ss, 0), 1);
+    ASSERT_EQ(ca_x(&ss, 1), 0);
+    ASSERT_EQ(ca_x(&ss, -1), 0);
+    // CA.SEED v != 0 writes v's 16 bits centred (bits 8..23). v == 1 sets the
+    // low bit -> row bit 8 -> cell at offset 8 - 16 = -8 from centre.
+    ca_seed(&ss, 1);
+    ASSERT_EQ(ca_x(&ss, -8), 1);
+    ASSERT_EQ(ca_x(&ss, 0), 0);
+    PASS();
+}
+
+TEST test_CA_SEED_reproducible() {
+    // Reseeding to the same value reproduces the subsequent stream exactly.
+    scene_state_t ss;
+    ss_init(&ss);
+    ca(&ss, 110);
+    ca(&ss, 110);  // diverge
+    ca_seed(&ss, 0);
+    int16_t s1 = ca(&ss, 110);
+    ca_seed(&ss, 0);
+    int16_t s2 = ca(&ss, 110);
+    ASSERT_EQ(s1, s2);
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -2733,4 +2878,12 @@ SUITE(process_suite) {
     RUN_TEST(test_PN_ORN_explicit_bank);
     RUN_TEST(test_P_ORN_half_turn_line);
     RUN_TEST(test_PN_ORN_bank_clamp);
+    RUN_TEST(test_CA_determinism);
+    RUN_TEST(test_CA_rule204_identity);
+    RUN_TEST(test_CA_rule255_saturates);
+    RUN_TEST(test_CA_rule0_autorevive);
+    RUN_TEST(test_CA_X_no_advance_and_wrap);
+    RUN_TEST(test_CA_X_does_not_advance_stream);
+    RUN_TEST(test_CA_SEED);
+    RUN_TEST(test_CA_SEED_reproducible);
 }

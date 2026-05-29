@@ -345,6 +345,41 @@ description = """
 The velocity helper gives velocity values (0-16383) at each step. The values are intended to be used for drum hit velocities. There are 16 steps, which wrap around. Divide by 129 to convert to midi cc values.
 """
 
+[CA]
+prototype = "CA rule"
+short = "Cellular-automaton rhythm. Advances one generation using Wolfram `rule` (`0-255`) and returns the centre cell (`0` or `1`)"
+description = """
+`CA` is a rhythm generator based on an elementary (Wolfram 1D) cellular automaton: a single `rule` number (`0-255`) is the whole character of the rhythm. A row of 32 cells lives in memory; each time you call `CA` it computes the next generation — every cell's new value is decided by itself plus its two (wrap-around) neighbours, looked up in the 8 bits of `rule` — and returns the centre cell as a `0`/`1` gate. Drop it into a metro:
+
+```
+M: IF CA 90: TR.P 1
+```
+
+Different rules give wildly different but structured behaviour — Rule 90 draws fractal (Sierpinski) patterns, Rule 30 is chaotic, Rule 110 is famously complex and never settles into an obvious loop. With 32 cyclic cells the period is effectively non-repeating for musical purposes.
+
+The automaton is one global instance (like `DRUNK`). If the row ever dies to all-zero (permanent silence), a single centre cell is automatically replanted so a metro-driven `CA` never gets stuck silent. Use `CA.SEED` to (re)seed it, and `CA.X` to read other cells of the same generation as correlated rhythm voices. The row is runtime state and is not saved with the scene; it resets to a single centre cell on `INIT`.
+"""
+
+["CA.X"]
+prototype = "CA.X off"
+short = "Reads the cellular-automaton cell at `off` cells from the centre (wraps mod 32) without advancing, returns `0` or `1`"
+description = """
+`CA.X` reads a cell of the **current** `CA` row without advancing the automaton, so one automaton can drive several *correlated* rhythm voices from the same generation. `off` is an offset from the centre cell (`CA.X 0` is the same cell `CA` returns) and wraps mod 32, so negative and large offsets are fine.
+
+```
+M: IF CA 90: TR.P 1      # main gate (advances the automaton)
+   IF CA.X 6: TR.P 2     # correlated voice, same generation
+   IF CA.X -6: TR.P 3
+```
+"""
+
+["CA.SEED"]
+prototype = "CA.SEED v"
+short = "Seeds the cellular-automaton row from `v`. `v = 0` plants a single centre cell; otherwise `v`'s 16 bits are written centred in the row"
+description = """
+`CA.SEED` (re)seeds the `CA` row. `CA.SEED 0` plants the canonical single centre cell (guaranteed alive). A non-zero `v` writes its 16 bits centred in the 32-cell row, giving a deterministic custom starting pattern. Combine with `RND`/`RRAND` for a random seed, e.g. `CA.SEED RND 32767`. Reseeding makes a run reproducible from a known starting point.
+"""
+
 [BPM]
 prototype = "BPM x"
 short = "milliseconds per beat in BPM `x`"

@@ -295,6 +295,9 @@
         "DR.T"        => { MATCH_OP(E_OP_DR_T); };
         "DR.P"        => { MATCH_OP(E_OP_DR_P); };
         "DR.V"        => { MATCH_OP(E_OP_DR_V); };
+        "CA"          => { MATCH_OP(E_OP_CA); };
+        "CA.X"        => { MATCH_OP(E_OP_CA_X); };
+        "CA.SEED"     => { MATCH_OP(E_OP_CA_SEED); };
         "BPM"         => { MATCH_OP(E_OP_BPM);; };
         "|"           => { MATCH_OP(E_OP_BIT_OR);; };
         "&"           => { MATCH_OP(E_OP_BIT_AND);; };

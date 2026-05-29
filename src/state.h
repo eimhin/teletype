@@ -307,6 +307,10 @@ typedef struct {
     // Current travel direction for PINGPONG/PENDULUM/BROWNIAN modes
     // (+1 or -1). Seeded from p_dir on init / P.I write.
     int8_t p_travel_dir[PATTERN_COUNT];
+    // Elementary cellular-automaton rhythm row (CA / CA.X / CA.SEED). 32
+    // cells, cyclic. Runtime-only — intentionally not persisted in
+    // nvram_scene_t. Reseeded to a single centre cell by ss_init.
+    uint32_t ca_row;
 } scene_state_t;
 
 extern void ss_init(scene_state_t *ss);

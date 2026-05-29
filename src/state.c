@@ -29,6 +29,7 @@ void ss_init(scene_state_t *ss) {
     memset(ss->p_acc_count, 0, sizeof(ss->p_acc_count));
     memset(ss->p_dwell, 0, sizeof(ss->p_dwell));
     memset(ss->p_just_advanced, 0, sizeof(ss->p_just_advanced));
+    ss->ca_row = 1u << 16;  // CA: single centre cell (see scene_state_t)
     memset(&ss->scripts, 0, ss_scripts_size(TOTAL_SCRIPT_COUNT));
     turtle_init(&ss->turtle);
     uint32_t ticks = tele_get_ticks();

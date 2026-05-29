@@ -147,6 +147,12 @@ static void op_DR_P_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
 static void op_DR_V_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
+static void op_CA_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                      command_state_t *cs);
+static void op_CA_X_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                        command_state_t *cs);
+static void op_CA_SEED_get(const void *data, scene_state_t *ss,
+                           exec_state_t *es, command_state_t *cs);
 static void op_BPM_get(const void *data, scene_state_t *ss, exec_state_t *es,
                        command_state_t *cs);
 static void op_BIT_OR_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -252,6 +258,9 @@ const tele_op_t op_NR    = MAKE_GET_OP(NR      , op_NR_get      , 4, true);
 const tele_op_t op_DR_T  = MAKE_GET_OP(DR.T    , op_DR_T_get    , 5, true);
 const tele_op_t op_DR_P  = MAKE_GET_OP(DR.P    , op_DR_P_get    , 3, true);
 const tele_op_t op_DR_V  = MAKE_GET_OP(DR.V    , op_DR_V_get    , 2, true);
+const tele_op_t op_CA    = MAKE_GET_OP(CA      , op_CA_get      , 1, true);
+const tele_op_t op_CA_X  = MAKE_GET_OP(CA.X    , op_CA_X_get    , 1, true);
+const tele_op_t op_CA_SEED = MAKE_GET_OP(CA.SEED, op_CA_SEED_get, 1, false);
 const tele_op_t op_BPM   = MAKE_GET_OP(BPM     , op_BPM_get     , 1, true);
 const tele_op_t op_BIT_OR  = MAKE_GET_OP(|, op_BIT_OR_get  , 2, true);
 const tele_op_t op_BIT_AND = MAKE_GET_OP(&, op_BIT_AND_get, 2, true);
@@ -1108,6 +1117,52 @@ static void op_NR_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
     uint16_t final = (uint16_t)((modified & 0xFFFF) | (modified >> 16));
     int16_t bit_status = (final >> (15 - step)) & 1;
     cs_push(cs, bit_status);
+}
+
+// Elementary (Wolfram 1D) cellular automaton rhythm engine. The row is a
+// 32-cell ring stored in ss->ca_row; the centre cell read out as a 0/1 gate is
+// bit CA_CENTER. CA advances one generation per call, CA.X reads any cell
+// without advancing (correlated voices), CA.SEED (re)seeds the row.
+#define CA_CENTER 16u
+#define CA_ROW_SEED (1u << CA_CENTER)
+
+// One generation, cyclic 32-cell row, standard Wolfram numbering: the
+// neighbourhood (left << 2) | (centre << 1) | right indexes a bit of rule.
+static uint32_t ca_step(uint32_t row, uint8_t rule) {
+    uint32_t next = 0;
+    for (uint32_t i = 0; i < 32; i++) {
+        uint32_t l = (row >> ((i + 31) & 31)) & 1;
+        uint32_t c = (row >> i) & 1;
+        uint32_t r = (row >> ((i + 1) & 31)) & 1;
+        if ((rule >> ((l << 2) | (c << 1) | r)) & 1) next |= (1u << i);
+    }
+    return next;
+}
+
+static void op_CA_get(const void *NOTUSED(data), scene_state_t *ss,
+                      exec_state_t *NOTUSED(es), command_state_t *cs) {
+    uint8_t rule = (uint8_t)(cs_pop(cs) & 0xFF);
+    uint32_t row = ca_step(ss->ca_row, rule);
+    // auto-revive: an all-zero row is permanent silence, so replant a single
+    // centre cell. (all-ones is a valid dense state and is left alone.)
+    if (row == 0) row = CA_ROW_SEED;
+    ss->ca_row = row;
+    cs_push(cs, (row >> CA_CENTER) & 1);
+}
+
+static void op_CA_X_get(const void *NOTUSED(data), scene_state_t *ss,
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t off = cs_pop(cs);
+    uint32_t idx = (uint32_t)(CA_CENTER + off) & 31;
+    cs_push(cs, (ss->ca_row >> idx) & 1);
+}
+
+static void op_CA_SEED_get(const void *NOTUSED(data), scene_state_t *ss,
+                           exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t v = cs_pop(cs);
+    // v == 0 plants the canonical single centre cell (guaranteed alive);
+    // otherwise write v's 16 bits centred in the 32-cell row (bits 8..23).
+    ss->ca_row = v ? ((uint32_t)(uint16_t)v << 8) : CA_ROW_SEED;
 }
 
 static void op_DR_T_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),

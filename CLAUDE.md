@@ -30,7 +30,12 @@ Targets (run from inside the container):
 - Firmware (AVR32 cross-compile, produces `module/teletype.hex`): `cd module && make clean && make`
 - Host tests (greatest framework): `cd tests && make clean && make test`
   - If `make test` has line-ending trouble, `make tests && ./tests` works. The tests Makefile builds host-native objects from `src/` — if you've previously built the module, run `make clean` first to avoid mixing AVR32 and host objects.
-- Simulator (REPL): `cd simulator && make && ./tt`
+- Simulator (REPL): `cd simulator && make && ./tt`. Like the tests, it builds host-native `src/` objects — run `make clean` first if you previously built the module, or `tt` silently fails to relink (mixed AVR32/host objects) and produces no output.
+  - **Driving it non-interactively** (agents/hooks/CI — e.g. to check an op parses and runs): pipe commands in, **end the input with a blank line**, and wrap in `timeout`:
+    ```bash
+    printf 'CA 90\nCA.X 1\n\n' | timeout 30 ./tt
+    ```
+    The REPL only quits on a blank line; on EOF `fgets` leaves the buffer non-empty and the loop **spins at 100% CPU** (leaving the `docker run` container alive until killed). The trailing blank line makes it exit cleanly (`(teletype exit.)`, status 0); `timeout` is a backstop. For pure token-recognition you usually don't need the REPL at all — the host `match_token_suite` already runs every op name through the tokenizer.
 - Release zip (`teletype.zip`): `make release` at repo root.
 - Format: `make format` (clang-format on uncommitted changes only) or `make format-all`.
 
