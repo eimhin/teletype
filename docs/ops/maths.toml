@@ -357,7 +357,9 @@ M: IF CA 90: TR.P 1
 
 Different rules give wildly different but structured behaviour — Rule 90 draws fractal (Sierpinski) patterns, Rule 30 is chaotic, Rule 110 is famously complex and never settles into an obvious loop. With 32 cyclic cells the period is effectively non-repeating for musical purposes.
 
-The automaton is one global instance (like `DRUNK`). If the row ever dies to all-zero (permanent silence), a single centre cell is automatically replanted so a metro-driven `CA` never gets stuck silent. Use `CA.SEED` to (re)seed it, and `CA.X` to read other cells of the same generation as correlated rhythm voices. The row is runtime state and is not saved with the scene; it resets to a single centre cell on `INIT`.
+`rule` is masked to its low 8 bits, so out-of-range or modulated values wrap into `0-255` rather than erroring.
+
+The automaton is one global instance (like `DRUNK`). If the row ever dies to all-zero (permanent silence), a single centre cell is automatically replanted so a metro-driven `CA` never gets stuck silent (a fully saturated all-ones row, by contrast, is a valid dense state and is left alone). Use `CA.SEED` to (re)seed it, and `CA.X` to read other cells of the same generation as correlated rhythm voices. The row is runtime state and is not saved with the scene; it resets to a single centre cell on `INIT`.
 """
 
 ["CA.X"]

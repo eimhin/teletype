@@ -2596,8 +2596,8 @@ TEST test_PN_ORN_bank_clamp() {
 // ---- CA / CA.X / CA.SEED (cellular-automaton rhythm) ----------------------
 
 // Run any single command line through the parse/validate/process path and
-// return its pushed value (0 for the no-return CA.SEED).
-static int16_t ca_line(scene_state_t* ss, const char* line) {
+// return the full result (so callers can also check has_value).
+static process_result_t ca_exec(scene_state_t* ss, const char* line) {
     exec_state_t es;
     es_init(&es);
     es_push(&es);
@@ -2606,24 +2606,28 @@ static int16_t ca_line(scene_state_t* ss, const char* line) {
     char error_msg[TELE_ERROR_MSG_LENGTH];
     parse(line, &cmd, error_msg);
     validate(&cmd, error_msg);
-    process_result_t r = process_command(ss, &es, &cmd);
-    return r.value;
+    return process_command(ss, &es, &cmd);
+}
+
+// Convenience: the pushed value (0 for the no-return CA.SEED).
+static int16_t ca_line(scene_state_t* ss, const char* line) {
+    return ca_exec(ss, line).value;
 }
 
 static int16_t ca(scene_state_t* ss, int rule) {
-    char line[16];
+    char line[24];
     snprintf(line, sizeof(line), "CA %d", rule);
     return ca_line(ss, line);
 }
 
 static int16_t ca_x(scene_state_t* ss, int off) {
-    char line[16];
+    char line[24];
     snprintf(line, sizeof(line), "CA.X %d", off);
     return ca_line(ss, line);
 }
 
 static void ca_seed(scene_state_t* ss, int v) {
-    char line[16];
+    char line[24];
     snprintf(line, sizeof(line), "CA.SEED %d", v);
     ca_line(ss, line);
 }
@@ -2735,6 +2739,88 @@ TEST test_CA_SEED_reproducible() {
     ca_seed(&ss, 0);
     int16_t s2 = ca(&ss, 110);
     ASSERT_EQ(s1, s2);
+    PASS();
+}
+
+TEST test_CA_parse_ok() {
+    // All three forms must parse and validate -- the de-facto guard that the
+    // CA / CA.X / CA.SEED tokens and arities are wired (op_mod_test does not
+    // cover match_token.rl).
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    ASSERT_EQ(parse("CA 90", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("CA.X 1", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("CA.SEED 5", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    PASS();
+}
+
+TEST test_CA_rule_wraps_mod_256() {
+    // rule is masked to its low 8 bits, so out-of-range rules wrap: -166 and
+    // 346 both reduce to 90 and must produce the identical gate stream.
+    scene_state_t a, b, c;
+    ss_init(&a);
+    ss_init(&b);
+    ss_init(&c);
+    for (int i = 0; i < 16; i++) {
+        int16_t v = ca(&a, 90);
+        ASSERT_EQ(ca(&b, -166), v);
+        ASSERT_EQ(ca(&c, 346), v);
+    }
+    PASS();
+}
+
+TEST test_CA_SEED_negative() {
+    // CA.SEED writes (uint16_t)v into row bits 8..23. v = -1 -> 0xFFFF -> every
+    // cell in that 16-wide window is set, and cells outside it stay clear.
+    scene_state_t ss;
+    ss_init(&ss);
+    ca_seed(&ss, -1);
+    ASSERT_EQ(ca_x(&ss, 0), 1);   // centre (bit 16) inside window
+    ASSERT_EQ(ca_x(&ss, 7), 1);   // bit 23, top of window
+    ASSERT_EQ(ca_x(&ss, -8), 1);  // bit 8, bottom of window
+    ASSERT_EQ(ca_x(&ss, 8), 0);   // bit 24, just outside the window
+    ASSERT_EQ(ca_x(&ss, -9), 0);  // bit 7, just outside the window
+    PASS();
+}
+
+TEST test_CA_all_ones_not_revived() {
+    // Auto-revive triggers ONLY on an all-zero row; a saturated (all-ones) row
+    // is a valid dense state and must be left alone. After two rule-255 steps
+    // the row is still fully saturated -- if it had been wrongly "revived" to a
+    // single centre cell, off-centre reads would be 0.
+    scene_state_t ss;
+    ss_init(&ss);
+    ASSERT_EQ(ca(&ss, 255), 1);
+    ASSERT_EQ(ca(&ss, 255), 1);
+    ASSERT_EQ(ca_x(&ss, 5), 1);
+    ASSERT_EQ(ca_x(&ss, -7), 1);
+    ASSERT_EQ(ca_x(&ss, 15), 1);
+    PASS();
+}
+
+TEST test_CA_SEED_no_return() {
+    // CA pushes a value; CA.SEED is declared no-return and must push nothing.
+    scene_state_t ss;
+    ss_init(&ss);
+    ASSERT_EQ(ca_exec(&ss, "CA 90").has_value, true);
+    ASSERT_EQ(ca_exec(&ss, "CA.SEED 0").has_value, false);
+    PASS();
+}
+
+TEST test_CA_INIT_resets_row() {
+    // INIT reseeds the row to a single centre cell (ca_row set in ss_init).
+    scene_state_t ss;
+    ss_init(&ss);
+    ca(&ss, 110);  // diverge into a spread-out row
+    ca(&ss, 110);
+    ca(&ss, 110);
+    ca_exec(&ss, "INIT");
+    ASSERT_EQ(ca_x(&ss, 0), 1);
+    ASSERT_EQ(ca_x(&ss, 1), 0);
+    ASSERT_EQ(ca_x(&ss, -1), 0);
     PASS();
 }
 
@@ -2886,4 +2972,10 @@ SUITE(process_suite) {
     RUN_TEST(test_CA_X_does_not_advance_stream);
     RUN_TEST(test_CA_SEED);
     RUN_TEST(test_CA_SEED_reproducible);
+    RUN_TEST(test_CA_parse_ok);
+    RUN_TEST(test_CA_rule_wraps_mod_256);
+    RUN_TEST(test_CA_SEED_negative);
+    RUN_TEST(test_CA_all_ones_not_revived);
+    RUN_TEST(test_CA_SEED_no_return);
+    RUN_TEST(test_CA_INIT_resets_row);
 }
