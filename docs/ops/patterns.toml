@@ -387,6 +387,32 @@ prototype = "PN.FUGUE x voice division transpose mode phase clock"
 short = "read pattern `x` as a fugal voice; return one scale degree for the given clock"
 description = "As `P.FUGUE`, but reads pattern `x`, and the voice-avoidance state table is keyed per bank so independent fugues on different patterns do not interfere."
 
+["P.ORN"]
+prototype = "P.ORN type position"
+short = "return an ornamented diatonic degree drawn from the working pattern's `START..END` window at `position`, transformed by ornament `type`"
+description = """Stateless, read-only ornament reader. Reads the working pattern's value at `position` (a focal note) and returns it transformed by ornament `type`, using the focal note's immediate neighbours in the `START..END` window for context. Input and output are diatonic scale degrees (`1-7` = one octave), to pair with `P.MOTIF` / `P.CP` and quantise downstream with `N.S` / `QT.S`. Never writes the pattern, advances `P.I`, uses randomness or timing — the same pattern and args always yield the same value.
+
+`position` wraps modulo the window length; neighbours wrap at the window edges. `type` selects the ornament (out of range collapses to `0` NONE):
+
+- `0` NONE — focal note unchanged
+- `1` ANTICIPATION — the next note (played early)
+- `2` SUSPENSION — the previous note (held over)
+- `3` NEIGHBOR_UP — focal `+ 1`
+- `4` NEIGHBOR_DN — focal `- 1`
+- `5` OCTAVE_UP — focal `+ 7`
+- `6` OCTAVE_DN — focal `- 7`
+- `7` FIFTH_UP — focal `+ 4`
+- `8` FIFTH_DN — focal `- 4`
+- `9` HALF_TURN_T — one degree past the next note, in the line's direction
+- `10` HALF_TURN_A — one degree from the focal note, opposite the line
+
+The result is clamped to the int16 range. An empty window (`START > END`) returns `0`. Pairs well with an ornament-type table held in another pattern bank, read via `PN.ORN`."""
+
+["PN.ORN"]
+prototype = "PN.ORN x type position"
+short = "as `P.ORN`, but reads pattern `x`"
+description = "As `P.ORN`, but reads pattern `x` rather than the working pattern."
+
 ["P.MODE"]
 prototype = "P.MODE"
 prototype_set = "P.MODE x"
