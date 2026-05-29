@@ -396,7 +396,7 @@ description = """
 
 Both voices place an onset on step 0, so they coincide there and then drift apart; the coincidence recurs every `LCM(a, b)` steps. To rotate the whole pattern, shift the step (`POLY a b f SUB s r`). Out-of-range arguments clamp to a musical result (a large `f` means dense, not silent).
 
-Each voice is exactly `euclidean(f, len, s)`, so `POLY a b f s` is equivalent to `| ER f a s ER f b s`.
+Each voice is exactly `euclidean(f, len, s)`, so for in-range arguments `POLY a b f s` is equivalent to `| ER f a s ER f b s`. (They diverge only out of range, where `POLY` clamps to a dense result and bare `ER` returns silence.)
 """
 
 ["POLY.X"]
@@ -410,7 +410,7 @@ description = """
 prototype = "POLY.A a b f s"
 short = "As `POLY`, but AND of the two Euclidean voices: fires only when both coincide (every LCM(a,b) steps). Returns `0` or `1`"
 description = """
-`POLY.A` is the AND of the two Euclidean voices used by `POLY` (same `a b f s` arguments). It fires only when *both* voices hit the same step, which happens every `LCM(a, b)` steps -- giving sparse accents that mark the moments of alignment. Good as a rare downbeat layer beneath `POLY` / `POLY.X`.
+`POLY.A` is the AND of the two Euclidean voices used by `POLY` (same `a b f s` arguments). It fires only when *both* voices hit the same step -- giving sparse accents that mark the moments of alignment. Good as a rare downbeat layer beneath `POLY` / `POLY.X`. With `f = 1` (single pulses) this happens exactly every `LCM(a, b)` steps; with a higher fill the two patterns can also coincide on other aligned steps.
 """
 
 [BPM]

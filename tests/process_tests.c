@@ -2961,9 +2961,45 @@ TEST test_POLY_degenerate_equal_periods() {
         for (int fi = 0; fi < 3; fi++) {
             int a = as[ai], f = fs[fi];
             for (int s = 0; s < 16; s++) {
-                ASSERT_EQ(poly(&ss, a, a, f, s), euclidean(f, a, s));
+                int16_t v = euclidean(f, a, s);
+                ASSERT_EQ(poly(&ss, a, a, f, s), v);    // OR of x with x = x
+                ASSERT_EQ(poly_x(&ss, a, a, f, s), 0);  // XOR collapses to 0
+                ASSERT_EQ(poly_a(&ss, a, a, f, s), v);  // AND of x with x = x
             }
         }
+    }
+    PASS();
+}
+
+TEST test_POLY_has_value() {
+    // All three ops are declared returns=true and must push a 0/1 value.
+    scene_state_t ss;
+    ss_init(&ss);
+    process_result_t r;
+    r = ca_exec(&ss, "POLY 8 9 1 0");
+    ASSERT_EQ(r.has_value, true);
+    ASSERT_EQ(r.value, 1);
+    r = ca_exec(&ss, "POLY.X 8 9 1 0");
+    ASSERT_EQ(r.has_value, true);
+    ASSERT_EQ(r.value, 0);
+    r = ca_exec(&ss, "POLY.A 8 9 1 0");
+    ASSERT_EQ(r.has_value, true);
+    ASSERT_EQ(r.value, 1);
+    PASS();
+}
+
+TEST test_POLY_negative_args() {
+    // Negative step is a real user path (docs suggest `POLY a b f SUB s r`);
+    // euclidean() wraps it. Negative len/fill clamp to 1. Cross-check both.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = -16; s < 0; s++) {
+        ASSERT_EQ(poly(&ss, 8, 9, 1, s),
+                  euclidean(1, 8, s) | euclidean(1, 9, s));
+        ASSERT_EQ(poly_x(&ss, 8, 9, 1, s),
+                  euclidean(1, 8, s) ^ euclidean(1, 9, s));
+        // negative len and fill both clamp to 1 -> euclidean(1,1,s) == 1 always
+        ASSERT_EQ(poly(&ss, -5, -5, -3, s), 1);
     }
     PASS();
 }
@@ -3147,5 +3183,7 @@ SUITE(process_suite) {
     RUN_TEST(test_POLY_AND_coincidence);
     RUN_TEST(test_POLY_mode_invariant);
     RUN_TEST(test_POLY_degenerate_equal_periods);
+    RUN_TEST(test_POLY_has_value);
+    RUN_TEST(test_POLY_negative_args);
     RUN_TEST(test_POLY_clamping);
 }
