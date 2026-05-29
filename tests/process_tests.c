@@ -3096,10 +3096,19 @@ TEST test_ERD_swell() {
                     ASSERT_EQ(erd(&ss, f, l, b, s),
                               euclidean(ref_tri_fill(f, b, s), l, s));
                 }
-    // endpoints: s=0 -> fill 1 (euclidean always hits step 0);
-    // s=b/2 -> fill peaks at f.
-    ASSERT_EQ(erd(&ss, 6, 16, 16, 0), 1);
-    ASSERT_EQ(erd(&ss, 6, 16, 16, 8), euclidean(6, 16, 8));
+    // Independent oracle (NOT derived from the production formula): the
+    // triangle fill for f=6, b=16 hand-computed over one breath. Catches a
+    // formula bug that the ref_tri_fill cross-check above could not.
+    static const int tri_6_16[16] = { 1, 1, 2, 2, 3, 4, 4, 5,
+                                      6, 5, 4, 4, 3, 2, 2, 1 };
+    for (int s = 0; s < 16; s++) {
+        ASSERT_EQ(erd(&ss, 6, 16, 16, s), euclidean(tri_6_16[s], 16, s));
+    }
+    // first-principles properties independent of the exact ramp:
+    ASSERT_EQ(tri_6_16[0], 1);       // trough at phase 0
+    ASSERT_EQ(tri_6_16[16 / 2], 6);  // peak f at the midpoint
+    for (int k = 1; k < 16; k++)     // breath symmetry up == down
+        ASSERT_EQ(tri_6_16[k], tri_6_16[16 - k]);
     // b < 2 -> no breath, equals plain ER f l s
     for (int s = 0; s < 16; s++) {
         ASSERT_EQ(erd(&ss, 3, 8, 1, s), euclidean(3, 8, s));
@@ -3108,8 +3117,7 @@ TEST test_ERD_swell() {
 }
 
 TEST test_ERD_W_wander() {
-    // Cross-check the sample-and-hold fill against euclidean(), confirm the
-    // fill is constant within each h-step block, and that it is deterministic.
+    // Wiring cross-check against the reference (catches eval-path regressions).
     scene_state_t ss;
     ss_init(&ss);
     int fs[2] = { 4, 7 };
@@ -3118,24 +3126,56 @@ TEST test_ERD_W_wander() {
         for (int hi = 0; hi < 2; hi++)
             for (int s = 0; s < 48; s++) {
                 int f = fs[fi], h = hs[hi];
-                int16_t v = erd_w(&ss, f, 16, h, s);
-                ASSERT_EQ(v, euclidean(ref_wander_fill(f, h, s), 16, s));
-                ASSERT_EQ(erd_w(&ss, f, 16, h, s), v);  // deterministic
+                ASSERT_EQ(erd_w(&ss, f, 16, h, s),
+                          euclidean(ref_wander_fill(f, h, s), 16, s));
             }
-    // block constancy: the implied fill is identical across a whole h-block.
-    for (int s = 0; s < 8; s++) {
-        ASSERT_EQ(ref_wander_fill(5, 8, s), ref_wander_fill(5, 8, 0));
+    // determinism shown across two independent state instances (a pure-op
+    // property the same-call re-check could not establish).
+    scene_state_t s2;
+    ss_init(&s2);
+    for (int s = 0; s < 48; s++) {
+        ASSERT_EQ(erd_w(&ss, 4, 16, 8, s), erd_w(&s2, 4, 16, 8, s));
+    }
+    // Independent block-constancy (no production hash used): within each
+    // h-block the fill is constant, so a single f0 in [1,f] must reproduce the
+    // op's gates for every step in the block.
+    const int f = 7, l = 16, h = 8;
+    for (int blk = 0; blk < 4; blk++) {
+        int found = 0;
+        for (int f0 = 1; f0 <= f && !found; f0++) {
+            int ok = 1;
+            for (int i = 0; i < h; i++) {
+                int s = blk * h + i;
+                if (erd_w(&ss, f, l, h, s) != euclidean(f0, l, s)) {
+                    ok = 0;
+                    break;
+                }
+            }
+            if (ok) found = 1;
+        }
+        ASSERT(found);  // one constant fill explains the whole block
     }
     PASS();
 }
 
 TEST test_ERD_clamping() {
-    // Out-of-range args clamp to musical results, never silent.
+    // Out-of-range args clamp to musical results, never silent. Checked via
+    // independent equivalences / the euclidean() oracle, not the production
+    // fill formulas.
     scene_state_t ss;
     ss_init(&ss);
     for (int s = 0; s < 20; s++) {
         ASSERT_EQ(erd(&ss, 3, 0, 8, s), 1);    // len < 1 -> 1 -> every step
         ASSERT_EQ(erd_w(&ss, 3, 0, 8, s), 1);  // len < 1 -> 1 -> every step
+        ASSERT_EQ(erd(&ss, 3, 99, 8, s),       // len > 32 behaves as len 32
+                  erd(&ss, 3, 32, 8, s));
+        ASSERT_EQ(erd(&ss, 99, 5, 1, s), 1);  // fill>len, b<2 -> dense -> 1
+        ASSERT_EQ(erd(&ss, 0, 8, 1, s),       // fill<1 -> 1; b<2 -> plain ER
+                  euclidean(1, 8, s));
+        ASSERT_EQ(erd(&ss, 3, 8, -4, s),  // b<2 (negative) -> plain ER
+                  euclidean(3, 8, s));
+        ASSERT_EQ(erd_w(&ss, 3, 8, 0, s),  // h<1 behaves as h=1
+                  erd_w(&ss, 3, 8, 1, s));
     }
     PASS();
 }
@@ -3170,6 +3210,41 @@ TEST test_BB_determinism_and_seed_wrap() {
             ASSERT_EQ(bb(&ss, seed + 16, s), v);
         }
     }
+    PASS();
+}
+
+TEST test_BB_density_alive() {
+    // Pins the BB_STRIDE / BB_SHIFT tuning: every seed must fire sometimes and
+    // not on a majority of steps. The no-cluster invariant is tuning-
+    // independent and cannot catch a dead or machine-gun seed, so this guards
+    // it explicitly.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int seed = 0; seed < 8; seed++) {
+        int hits = 0;
+        for (int s = 0; s < 200; s++) hits += bb(&ss, seed, s);
+        ASSERT(hits > 0);    // not a dead seed
+        ASSERT(hits < 100);  // not machine-gunning (< 50% of steps)
+    }
+    PASS();
+}
+
+TEST test_ERD_BB_negative_step() {
+    // Negative step exercises the floor-division / phase-wrap / step-1 wrap
+    // branches. Output must stay a clean 0/1 (never crash/garbage), and
+    // negative fill/len/hold clamp to musical results.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = -40; s < 0; s++) {
+        int16_t e = erd(&ss, 6, 16, 16, s);
+        int16_t w = erd_w(&ss, 4, 16, 8, s);
+        int16_t b = bb(&ss, 3, s);
+        ASSERT(e == 0 || e == 1);
+        ASSERT(w == 0 || w == 1);
+        ASSERT(b == 0 || b == 1);
+    }
+    ASSERT_EQ(erd(&ss, -5, 8, 8, 0), 1);    // f < 1 -> fill 1, step 0 hits
+    ASSERT_EQ(erd_w(&ss, -5, 8, 0, 0), 1);  // f < 1 and h < 1 both clamp
     PASS();
 }
 
@@ -3344,4 +3419,6 @@ SUITE(process_suite) {
     RUN_TEST(test_ERD_clamping);
     RUN_TEST(test_BB_no_cluster);
     RUN_TEST(test_BB_determinism_and_seed_wrap);
+    RUN_TEST(test_BB_density_alive);
+    RUN_TEST(test_ERD_BB_negative_step);
 }

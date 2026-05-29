@@ -434,7 +434,7 @@ description = """
 `ERD.W` is a Euclidean rhythm whose fill **wanders**: every `h` steps it jumps to a new pseudo-random density in `1..f` and holds it until the next jump (sample-and-hold). This gives an organic, never-quite-repeating drift rather than the smooth swell of `ERD`. It is deterministic (the random level is derived from the step), so it is pure and resettable.
 
  - `f` is the maximum fill, `l` the Euclidean length (`1-32`)
- - `h` is the hold length in steps between density changes
+ - `h` is the hold length in steps between density changes (`h < 1` is treated as 1)
  - `s` is the step
 
 Out-of-range arguments clamp to a musical result. Use `ERD` for a predictable swell instead.
