@@ -153,6 +153,12 @@ static void op_CA_X_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
 static void op_CA_SEED_get(const void *data, scene_state_t *ss,
                            exec_state_t *es, command_state_t *cs);
+static void op_POLY_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                        command_state_t *cs);
+static void op_POLY_X_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                          command_state_t *cs);
+static void op_POLY_A_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                          command_state_t *cs);
 static void op_BPM_get(const void *data, scene_state_t *ss, exec_state_t *es,
                        command_state_t *cs);
 static void op_BIT_OR_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -261,6 +267,9 @@ const tele_op_t op_DR_V  = MAKE_GET_OP(DR.V    , op_DR_V_get    , 2, true);
 const tele_op_t op_CA    = MAKE_GET_OP(CA      , op_CA_get      , 1, true);
 const tele_op_t op_CA_X  = MAKE_GET_OP(CA.X    , op_CA_X_get    , 1, true);
 const tele_op_t op_CA_SEED = MAKE_GET_OP(CA.SEED, op_CA_SEED_get, 1, false);
+const tele_op_t op_POLY  = MAKE_GET_OP(POLY    , op_POLY_get    , 4, true);
+const tele_op_t op_POLY_X = MAKE_GET_OP(POLY.X , op_POLY_X_get  , 4, true);
+const tele_op_t op_POLY_A = MAKE_GET_OP(POLY.A , op_POLY_A_get  , 4, true);
 const tele_op_t op_BPM   = MAKE_GET_OP(BPM     , op_BPM_get     , 1, true);
 const tele_op_t op_BIT_OR  = MAKE_GET_OP(|, op_BIT_OR_get  , 2, true);
 const tele_op_t op_BIT_AND = MAKE_GET_OP(&, op_BIT_AND_get, 2, true);
@@ -1163,6 +1172,50 @@ static void op_CA_SEED_get(const void *NOTUSED(data), scene_state_t *ss,
     // v == 0 plants the canonical single centre cell (guaranteed alive);
     // otherwise write v's 16 bits centred in the 32-cell row (bits 8..23).
     ss->ca_row = v ? ((uint32_t)(uint16_t)v << 8) : CA_ROW_SEED;
+}
+
+// POLY: interference rhythm. Two Euclidean voices of different periods (a, b)
+// share a fill and step; combining them (OR / XOR / AND) produces a composite
+// that phases as the voices drift against each other. One voice, with friendly
+// clamping so out-of-range len/fill never yields silent (euclidean() returns 0
+// outside its supported ranges; we clamp so a big fill means dense instead).
+static int16_t poly_voice(int16_t len, int16_t fill, int16_t step) {
+    if (len < 1)
+        len = 1;
+    else if (len > 32)
+        len = 32;  // euclidean() supports lengths 1..32
+    if (fill < 1)
+        fill = 1;
+    else if (fill > len)
+        fill = len;
+    return (int16_t)euclidean(fill, len, step);
+}
+
+static void op_POLY_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t a = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    int16_t fill = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    cs_push(cs, poly_voice(a, fill, step) | poly_voice(b, fill, step));
+}
+
+static void op_POLY_X_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t a = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    int16_t fill = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    cs_push(cs, poly_voice(a, fill, step) ^ poly_voice(b, fill, step));
+}
+
+static void op_POLY_A_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t a = cs_pop(cs);
+    int16_t b = cs_pop(cs);
+    int16_t fill = cs_pop(cs);
+    int16_t step = cs_pop(cs);
+    cs_push(cs, poly_voice(a, fill, step) & poly_voice(b, fill, step));
 }
 
 static void op_DR_T_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),

@@ -298,6 +298,9 @@
         "CA"          => { MATCH_OP(E_OP_CA); };
         "CA.X"        => { MATCH_OP(E_OP_CA_X); };
         "CA.SEED"     => { MATCH_OP(E_OP_CA_SEED); };
+        "POLY"        => { MATCH_OP(E_OP_POLY); };
+        "POLY.X"      => { MATCH_OP(E_OP_POLY_X); };
+        "POLY.A"      => { MATCH_OP(E_OP_POLY_A); };
         "BPM"         => { MATCH_OP(E_OP_BPM);; };
         "|"           => { MATCH_OP(E_OP_BIT_OR);; };
         "&"           => { MATCH_OP(E_OP_BIT_AND);; };

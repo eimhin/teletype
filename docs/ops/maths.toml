@@ -382,6 +382,37 @@ description = """
 `CA.SEED` (re)seeds the `CA` row. `CA.SEED 0` plants the canonical single centre cell (guaranteed alive). A non-zero `v` writes its 16 bits centred in the 32-cell row, giving a deterministic custom starting pattern. Combine with `RND`/`RRAND` for a random seed, e.g. `CA.SEED RND 32767`. Reseeding makes a run reproducible from a known starting point.
 """
 
+[POLY]
+prototype = "POLY a b f s"
+short = "Interference rhythm: OR of two Euclidean voices of length `a` and `b`, each with fill `f`, at step `s`. Returns `0` or `1`"
+description = """
+`POLY` is an interference (phasing) rhythm. It runs two Euclidean voices of *different* periods -- length `a` with `f` hits, and length `b` with `f` hits -- and returns their combination at step `s`. Because the two periods differ, the voices drift in and out of phase on their own, so the composite rhythm evolves continuously with no modulation. It is a pure function of `s` (like `ER`), so it is resettable and you can run many independent instances.
+
+ - `a`, `b` are the two voice lengths (`1-32`)
+ - `f` is the number of hits per voice (the density knob); `f = 1` gives sparse single pulses
+ - `s` is the step (e.g. a counter advanced by your metro)
+
+`POLY` returns the **OR** of the two voices -- spaced onsets that phase against each other. The companions `POLY.X` (XOR) and `POLY.A` (AND) read the same relationship differently; patch all three to drive correlated voices that breathe together.
+
+Both voices place an onset on step 0, so they coincide there and then drift apart; the coincidence recurs every `LCM(a, b)` steps. To rotate the whole pattern, shift the step (`POLY a b f SUB s r`). Out-of-range arguments clamp to a musical result (a large `f` means dense, not silent).
+
+Each voice is exactly `euclidean(f, len, s)`, so `POLY a b f s` is equivalent to `| ER f a s ER f b s`.
+"""
+
+["POLY.X"]
+prototype = "POLY.X a b f s"
+short = "As `POLY`, but XOR of the two Euclidean voices: fires when exactly one voice hits, dropping out when they coincide. Returns `0` or `1`"
+description = """
+`POLY.X` is the XOR of the two Euclidean voices used by `POLY` (same `a b f s` arguments). It fires when *exactly one* voice hits and is silent whenever both coincide -- so it is the drifting pair with the alignment removed, including the onset on step 0. Useful when you want the phasing motion without the periodic "both" hit.
+"""
+
+["POLY.A"]
+prototype = "POLY.A a b f s"
+short = "As `POLY`, but AND of the two Euclidean voices: fires only when both coincide (every LCM(a,b) steps). Returns `0` or `1`"
+description = """
+`POLY.A` is the AND of the two Euclidean voices used by `POLY` (same `a b f s` arguments). It fires only when *both* voices hit the same step, which happens every `LCM(a, b)` steps -- giving sparse accents that mark the moments of alignment. Good as a rare downbeat layer beneath `POLY` / `POLY.X`.
+"""
+
 [BPM]
 prototype = "BPM x"
 short = "milliseconds per beat in BPM `x`"

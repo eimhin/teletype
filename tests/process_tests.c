@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>  // ssize_t
 
+#include "euclidean/euclidean.h"
 #include "greatest/greatest.h"
 #include "ops/patterns.h"
 #include "teletype.h"
@@ -2824,6 +2825,166 @@ TEST test_CA_INIT_resets_row() {
     PASS();
 }
 
+// ---- POLY / POLY.X / POLY.A (interference / phasing rhythm) ---------------
+
+static int16_t poly(scene_state_t* ss, int a, int b, int f, int s) {
+    char line[48];
+    snprintf(line, sizeof(line), "POLY %d %d %d %d", a, b, f, s);
+    return ca_exec(ss, line).value;
+}
+
+static int16_t poly_x(scene_state_t* ss, int a, int b, int f, int s) {
+    char line[48];
+    snprintf(line, sizeof(line), "POLY.X %d %d %d %d", a, b, f, s);
+    return ca_exec(ss, line).value;
+}
+
+static int16_t poly_a(scene_state_t* ss, int a, int b, int f, int s) {
+    char line[48];
+    snprintf(line, sizeof(line), "POLY.A %d %d %d %d", a, b, f, s);
+    return ca_exec(ss, line).value;
+}
+
+TEST test_POLY_parse_ok() {
+    tele_command_t cmd;
+    char error_msg[TELE_ERROR_MSG_LENGTH];
+    ASSERT_EQ(parse("POLY 8 9 1 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("POLY.X 8 9 1 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    ASSERT_EQ(parse("POLY.A 8 9 1 0", &cmd, error_msg), E_OK);
+    ASSERT_EQ(validate(&cmd, error_msg), E_OK);
+    PASS();
+}
+
+TEST test_POLY_matches_euclidean() {
+    // POLY is exactly two Euclidean voices combined bitwise. Cross-check
+    // against the reused primitive over a grid of in-range args (so clamping
+    // is the identity and poly_voice == euclidean).
+    scene_state_t ss;
+    ss_init(&ss);
+    int as[3] = { 3, 5, 8 };
+    int bs[3] = { 4, 7, 9 };
+    int fs[2] = { 1, 2 };
+    for (int ai = 0; ai < 3; ai++) {
+        for (int bi = 0; bi < 3; bi++) {
+            for (int fi = 0; fi < 2; fi++) {
+                int a = as[ai], b = bs[bi], f = fs[fi];
+                for (int s = 0; s < 32; s++) {
+                    int16_t va = euclidean(f, a, s);
+                    int16_t vb = euclidean(f, b, s);
+                    ASSERT_EQ(poly(&ss, a, b, f, s), va | vb);
+                    ASSERT_EQ(poly_x(&ss, a, b, f, s), va ^ vb);
+                    ASSERT_EQ(poly_a(&ss, a, b, f, s), va & vb);
+                }
+            }
+        }
+    }
+    PASS();
+}
+
+TEST test_POLY_determinism() {
+    // Pure function: repeated identical calls give identical results.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = 0; s < 20; s++) {
+        int16_t first = poly(&ss, 8, 9, 1, s);
+        ASSERT_EQ(poly(&ss, 8, 9, 1, s), first);
+        ASSERT_EQ(poly(&ss, 8, 9, 1, s), first);
+    }
+    PASS();
+}
+
+TEST test_POLY_alignment_step0() {
+    // Euclidean voices always have an onset on step 0, so the two voices
+    // coincide there: AND fires, XOR is silent, OR fires.
+    scene_state_t ss;
+    ss_init(&ss);
+    int as[3] = { 3, 5, 8 };
+    int bs[3] = { 4, 7, 9 };
+    for (int i = 0; i < 3; i++) {
+        ASSERT_EQ(poly_a(&ss, as[i], bs[i], 1, 0), 1);
+        ASSERT_EQ(poly_x(&ss, as[i], bs[i], 1, 0), 0);
+        ASSERT_EQ(poly(&ss, as[i], bs[i], 1, 0), 1);
+    }
+    PASS();
+}
+
+TEST test_POLY_drifting_pair() {
+    // POLY 8 9 1 s (OR of two single pulses) fires at multiples of 8 or 9 --
+    // the drifting pair whose gap widens as the clocks phase apart.
+    scene_state_t ss;
+    ss_init(&ss);
+    int hits[8] = { 0, 8, 9, 16, 18, 24, 27, 32 };
+    int hi = 0;
+    for (int s = 0; s <= 35; s++) {
+        int expected = (hi < 8 && hits[hi] == s) ? 1 : 0;
+        ASSERT_EQ(poly(&ss, 8, 9, 1, s), expected);
+        if (expected) hi++;
+    }
+    PASS();
+}
+
+TEST test_POLY_AND_coincidence() {
+    // AND fires only when both voices coincide -- every LCM(8,9) = 72 steps.
+    scene_state_t ss;
+    ss_init(&ss);
+    ASSERT_EQ(poly_a(&ss, 8, 9, 1, 0), 1);
+    ASSERT_EQ(poly_a(&ss, 8, 9, 1, 8), 0);
+    ASSERT_EQ(poly_a(&ss, 8, 9, 1, 9), 0);
+    ASSERT_EQ(poly_a(&ss, 8, 9, 1, 36), 0);
+    ASSERT_EQ(poly_a(&ss, 8, 9, 1, 72), 1);
+    PASS();
+}
+
+TEST test_POLY_mode_invariant() {
+    // For booleans, OR == XOR | AND. Holds for every arg combination.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = 0; s < 40; s++) {
+        int16_t orv = poly(&ss, 5, 7, 2, s);
+        int16_t xorv = poly_x(&ss, 5, 7, 2, s);
+        int16_t andv = poly_a(&ss, 5, 7, 2, s);
+        ASSERT_EQ(orv, xorv | andv);
+    }
+    PASS();
+}
+
+TEST test_POLY_degenerate_equal_periods() {
+    // a == b: the two voices are identical, so the composite equals one
+    // Euclidean voice (same as ER f a s).
+    scene_state_t ss;
+    ss_init(&ss);
+    int as[2] = { 5, 8 };
+    int fs[3] = { 1, 2, 3 };
+    for (int ai = 0; ai < 2; ai++) {
+        for (int fi = 0; fi < 3; fi++) {
+            int a = as[ai], f = fs[fi];
+            for (int s = 0; s < 16; s++) {
+                ASSERT_EQ(poly(&ss, a, a, f, s), euclidean(f, a, s));
+            }
+        }
+    }
+    PASS();
+}
+
+TEST test_POLY_clamping() {
+    // Out-of-range args clamp to a musical result instead of euclidean()'s
+    // silent 0: fill > len -> dense (all hits); fill < 1 -> 1; len < 1 -> 1;
+    // len > 32 -> 32.
+    scene_state_t ss;
+    ss_init(&ss);
+    for (int s = 0; s < 20; s++) {
+        ASSERT_EQ(poly(&ss, 5, 5, 99, s), 1);  // fill clamps to 5 = all hits
+        ASSERT_EQ(poly(&ss, 0, 0, 1, s), 1);   // len clamps to 1 = every step
+        // fill < 1 clamps to 1 -> single pulse at multiples of 5
+        ASSERT_EQ(poly(&ss, 5, 5, 0, s), euclidean(1, 5, s));
+        // len > 32 clamps to 32 -> single pulse at multiples of 32
+        ASSERT_EQ(poly(&ss, 99, 99, 1, s), euclidean(1, 32, s));
+    }
+    PASS();
+}
+
 SUITE(process_suite) {
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
@@ -2978,4 +3139,13 @@ SUITE(process_suite) {
     RUN_TEST(test_CA_all_ones_not_revived);
     RUN_TEST(test_CA_SEED_no_return);
     RUN_TEST(test_CA_INIT_resets_row);
+    RUN_TEST(test_POLY_parse_ok);
+    RUN_TEST(test_POLY_matches_euclidean);
+    RUN_TEST(test_POLY_determinism);
+    RUN_TEST(test_POLY_alignment_step0);
+    RUN_TEST(test_POLY_drifting_pair);
+    RUN_TEST(test_POLY_AND_coincidence);
+    RUN_TEST(test_POLY_mode_invariant);
+    RUN_TEST(test_POLY_degenerate_equal_periods);
+    RUN_TEST(test_POLY_clamping);
 }
