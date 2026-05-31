@@ -34,6 +34,20 @@ prototype = "RRAND x y"
 aliases = ["RRND"]
 short = "generate a random number between `x` and `y` inclusive"
 
+[SRND]
+prototype = "SRND x y"
+short = "seeded random: stable pseudo-random value `0..32767` for each `(seed, index)` pair `(x, y)`"
+description = """
+Returns a deterministic pseudo-random value `0..32767` for each `(seed, index)` pair `(x, y)`. Identical inputs always give the same output, so sequences survive scene save/load and power-cycle; distinct seeds give independent (decorrelated) sequences. Unlike `RAND`, it keeps no hidden generator state.
+"""
+
+[SRND.R]
+prototype = "SRND.R x y z"
+short = "ranged seeded random: `SRND x y` folded into the range `0` to `z` inclusive"
+description = """
+As `SRND`, but folds the result into the range `0` to `z` inclusive (when `z > 0`). When `z <= 0`, returns the full `0..32767` value unchanged.
+"""
+
 [TOSS]
 prototype = "TOSS"
 short = "randomly return `0` or `1`"

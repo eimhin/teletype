@@ -235,6 +235,8 @@
         "RND"         => { MATCH_OP(E_OP_RND); };
         "RRAND"       => { MATCH_OP(E_OP_RRAND); };
         "RRND"        => { MATCH_OP(E_OP_RRND); };
+        "SRND"        => { MATCH_OP(E_OP_SRND); };
+        "SRND.R"      => { MATCH_OP(E_OP_SRND_R); };
         "R"           => { MATCH_OP(E_OP_R); };
         "R.MIN"       => { MATCH_OP(E_OP_R_MIN); };
         "R.MAX"       => { MATCH_OP(E_OP_R_MAX); };

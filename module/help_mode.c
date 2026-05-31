@@ -298,12 +298,14 @@ const char* help4[HELP4_LENGTH] = { "4/17 DATA AND TABLES",
                                     "   S = STEP (0-15)"                                     
                                     };
 
-#define HELP5_LENGTH 130
+#define HELP5_LENGTH 132
 const char* help5[HELP5_LENGTH] = { "5/17 OPERATORS",
                                     " ",
                                     "RAND A|RANDOM 0 - A",
                                     "RRAND A B|RANDOM A - B",
                                     "TOSS|RANDOM 0 OR 1",
+                                    "SRND A B|STABLE RAND, A=SEED B=IDX",
+                                    "SRND.R A B C|STABLE RAND 0 - C",
                                     " ",
                                     "CHAOS|CHAOTIC NUMBER",
                                     "CHAOS.R|CHAOS PARAMETER",

@@ -208,6 +208,8 @@ typedef enum {
     E_OP_RND,
     E_OP_RRAND,
     E_OP_RRND,
+    E_OP_SRND,
+    E_OP_SRND_R,
     E_OP_R,
     E_OP_R_MIN,
     E_OP_R_MAX,

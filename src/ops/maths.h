@@ -12,6 +12,8 @@ extern const tele_op_t op_RAND;
 extern const tele_op_t op_RND;
 extern const tele_op_t op_RRAND;
 extern const tele_op_t op_RRND;
+extern const tele_op_t op_SRND;
+extern const tele_op_t op_SRND_R;
 extern const tele_op_t op_R;
 extern const tele_op_t op_R_MIN;
 extern const tele_op_t op_R_MAX;

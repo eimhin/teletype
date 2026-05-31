@@ -3278,7 +3278,75 @@ TEST test_ERD_BB_negative_step() {
     PASS();
 }
 
+TEST test_SRND() {
+    // Stability pin: SRND is a pure function, so a fixed (seed, index) must
+    // always produce this exact value (computed independently). A change here
+    // means the algorithm drifted and old scenes would no longer reproduce.
+    char* pin[1] = { "SRND 4471 0" };
+    CHECK_CALL(process_helper(1, pin, 29010));
+
+    // Determinism: identical inputs are equal within a run.
+    char* det[1] = { "EQ SRND 4471 0 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, det, 1));
+
+    // No degenerate fixed point: (0, 0) must not collapse to 0.
+    char* nz[1] = { "NZ SRND 0 0" };
+    CHECK_CALL(process_helper(1, nz, 1));
+
+    // Range: 0..32767, never negative.
+    char* lo[1] = { "GTE SRND 4471 0 0" };
+    CHECK_CALL(process_helper(1, lo, 1));
+    char* hi[1] = { "LTE SRND 4471 0 32767" };
+    CHECK_CALL(process_helper(1, hi, 1));
+    // A second independently-computed pin at a distinct input guards against
+    // drift slipping past a single pin (and a large index stays in range).
+    char* pin2[1] = { "SRND 202 9999" };
+    CHECK_CALL(process_helper(1, pin2, 16662));
+
+    // Negative seed exercises the int16->uint16 cast path (-1 -> 0xFFFF): must
+    // stay deterministic and in range.
+    char* neg_seed[1] = { "EQ SRND -1 0 SRND -1 0" };
+    CHECK_CALL(process_helper(1, neg_seed, 1));
+    char* neg_seed_rng[1] = { "LTE SRND -1 0 32767" };
+    CHECK_CALL(process_helper(1, neg_seed_rng, 1));
+
+    // Decorrelation: adjacent seeds and adjacent indices differ, at both small
+    // and large seeds.
+    char* seed_decorr[1] = { "EQ SRND 4472 0 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, seed_decorr, 0));
+    char* index_decorr[1] = { "EQ SRND 4471 1 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, index_decorr, 0));
+    char* seed_decorr_small[1] = { "EQ SRND 1 0 SRND 2 0" };
+    CHECK_CALL(process_helper(1, seed_decorr_small, 0));
+    char* seed_decorr_ref[1] = { "EQ SRND 101 0 SRND 202 0" };
+    CHECK_CALL(process_helper(1, seed_decorr_ref, 0));
+    char* index_decorr_ref[1] = { "EQ SRND 101 5 SRND 101 6" };
+    CHECK_CALL(process_helper(1, index_decorr_ref, 0));
+
+    // Ranged variant SRND.R: result lies in 0..max inclusive (when max > 0).
+    char* r_lte[1] = { "LTE SRND.R 4471 0 100 100" };
+    CHECK_CALL(process_helper(1, r_lte, 1));
+    char* r_gte[1] = { "GTE SRND.R 4471 0 100 0" };
+    CHECK_CALL(process_helper(1, r_gte, 1));
+    // max == 1: SRND 4471 4 is odd, so it must fold to exactly 1. A v % max
+    // off-by-one (instead of v % (max + 1)) would wrongly yield 0 here.
+    char* r_one[1] = { "SRND.R 4471 4 1" };
+    CHECK_CALL(process_helper(1, r_one, 1));
+    // max == 32767 (INT16_MAX): max + 1 must not overflow; the value is < that,
+    // so it passes through unchanged (equals the raw SRND).
+    char* r_imax[1] = { "EQ SRND.R 4471 0 32767 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, r_imax, 1));
+    // max <= 0 returns the raw value unchanged (both zero and negative max).
+    char* r_zero[1] = { "EQ SRND.R 4471 0 0 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, r_zero, 1));
+    char* r_neg[1] = { "EQ SRND.R 4471 0 -5 SRND 4471 0" };
+    CHECK_CALL(process_helper(1, r_neg, 1));
+
+    PASS();
+}
+
 SUITE(process_suite) {
+    RUN_TEST(test_SRND);
     RUN_TEST(test_numbers);
     RUN_TEST(test_ADD);
     RUN_TEST(test_PROB);

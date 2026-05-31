@@ -23,6 +23,10 @@ static void op_RAND_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
 static void op_RRAND_get(const void *data, scene_state_t *ss, exec_state_t *es,
                          command_state_t *cs);
+static void op_SRND_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                        command_state_t *cs);
+static void op_SRND_R_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                          command_state_t *cs);
 static void op_R_get(const void *data, scene_state_t *ss, exec_state_t *es,
                      command_state_t *cs);
 static void op_R_set(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -210,6 +214,8 @@ const tele_op_t op_RAND  = MAKE_GET_OP(RAND    , op_RAND_get    , 1, true);
 const tele_op_t op_RND   = MAKE_GET_OP(RND     , op_RAND_get    , 1, true);
 const tele_op_t op_RRAND = MAKE_GET_OP(RRAND   , op_RRAND_get   , 2, true);
 const tele_op_t op_RRND  = MAKE_GET_OP(RRND    , op_RRAND_get   , 2, true);
+const tele_op_t op_SRND  = MAKE_GET_OP(SRND    , op_SRND_get    , 2, true);
+const tele_op_t op_SRND_R = MAKE_GET_OP(SRND.R , op_SRND_R_get  , 3, true);
 const tele_op_t op_R = MAKE_GET_SET_OP(R, op_R_get, op_R_set, 0, true);
 const tele_op_t op_R_MIN = MAKE_GET_SET_OP(R.MIN, op_R_MIN_get, op_R_MIN_set, 0, true);
 const tele_op_t op_R_MAX = MAKE_GET_SET_OP(R.MAX, op_R_MAX_get, op_R_MAX_set, 0, true);
@@ -547,6 +553,38 @@ static void op_RRAND_get(const void *NOTUSED(data), scene_state_t *ss,
     a = cs_pop(cs);
     b = cs_pop(cs);
     cs_push(cs, push_random(a, b, ss));
+}
+
+// Stateless seeded random: a pure function of (seed, index). Keeps no hidden
+// generator state, so the same inputs always give the same output across scene
+// save/load and power-cycle. MurmurHash3-style mix + finalizer for avalanche.
+static uint16_t srnd_raw(uint16_t seed, uint16_t index) {
+    // The +1 keeps the pre-finalizer value non-zero at (seed, index) = (0, 0):
+    // MurmurHash3's finalizer maps 0 -> 0, so without it SRND 0 0 would return
+    // a non-random 0 (the sole fixed point).
+    uint32_t h = (uint32_t)seed * 2654435761u + index + 1u;  // mix seed + index
+    h ^= h >> 15;
+    h *= 2246822519u;  // murmur3 finalizer
+    h ^= h >> 13;
+    h *= 3266489917u;
+    h ^= h >> 16;
+    return (uint16_t)(h & 0x7FFF);  // 0..32767, always non-negative
+}
+
+static void op_SRND_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    uint16_t seed = (uint16_t)cs_pop(cs);   // first (leftmost) arg
+    uint16_t index = (uint16_t)cs_pop(cs);  // second arg
+    cs_push(cs, (int16_t)srnd_raw(seed, index));
+}
+
+static void op_SRND_R_get(const void *NOTUSED(data), scene_state_t *NOTUSED(ss),
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    uint16_t seed = (uint16_t)cs_pop(cs);   // first (leftmost) arg
+    uint16_t index = (uint16_t)cs_pop(cs);  // second arg
+    int16_t max = cs_pop(cs);               // third arg
+    int16_t v = (int16_t)srnd_raw(seed, index);
+    cs_push(cs, (max > 0) ? (v % (max + 1)) : v);
 }
 
 
