@@ -369,8 +369,9 @@ TEST test_P_ACC() {
     char* prep[3] = { "P.N 0", "PN 0 0 100", "PN 0 0" };
     CHECK_CALL(process_helper_state(&ss, 3, prep, 100));
 
+    // Index defaults to 0; P.A reads the current play index (P.HERE-style).
     // step=2, n=0 (no reset): 100, 102, 104, 106, ...
-    char* t[1] = { "P.A 0 2 0" };
+    char* t[1] = { "P.A 2 0" };
     CHECK_CALL(process_helper_state(&ss, 1, t, 100));
     CHECK_CALL(process_helper_state(&ss, 1, t, 102));
     CHECK_CALL(process_helper_state(&ss, 1, t, 104));
@@ -381,17 +382,46 @@ TEST test_P_ACC() {
     CHECK_CALL(process_helper_state(&ss, 1, read_base, 100));
 
     // ACC.CLR rezeroes all offsets.
-    char* clr_then_read[2] = { "ACC.CLR", "P.A 0 2 0" };
+    char* clr_then_read[2] = { "ACC.CLR", "P.A 2 0" };
     CHECK_CALL(process_helper_state(&ss, 2, clr_then_read, 100));
 
     // Reset-every-n: step=1, n=3 -> 100, 101, 102, 100, 101, ...
-    char* clr_then_read2[2] = { "ACC.CLR", "P.A 0 1 3" };
+    char* clr_then_read2[2] = { "ACC.CLR", "P.A 1 3" };
     CHECK_CALL(process_helper_state(&ss, 2, clr_then_read2, 100));
-    char* t2[1] = { "P.A 0 1 3" };
+    char* t2[1] = { "P.A 1 3" };
     CHECK_CALL(process_helper_state(&ss, 1, t2, 101));
     CHECK_CALL(process_helper_state(&ss, 1, t2, 102));
     CHECK_CALL(process_helper_state(&ss, 1, t2, 100));
     CHECK_CALL(process_helper_state(&ss, 1, t2, 101));
+
+    PASS();
+}
+
+// P.A follows the current play index, and accumulators are keyed per-cell:
+// moving P.I to another cell accumulates independently.
+TEST test_P_ACC_follows_index() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // Distinct values at cells 3 and 5 of the active pattern (len 6 so the
+    // play index can reach them).
+    char* prep[5] = { "P.N 0", "P.L 6", "PN 0 3 300", "PN 0 5 500", "PN 0 5" };
+    CHECK_CALL(process_helper_state(&ss, 5, prep, 500));
+
+    // Accumulate cell 3.
+    char* at3[2] = { "P.I 3", "P.A 2 0" };
+    CHECK_CALL(process_helper_state(&ss, 2, at3, 300));
+    char* acc[1] = { "P.A 2 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, acc, 302));
+
+    // Move the play index to cell 5: its offset starts fresh at 0.
+    char* at5[2] = { "P.I 5", "P.A 2 0" };
+    CHECK_CALL(process_helper_state(&ss, 2, at5, 500));
+    CHECK_CALL(process_helper_state(&ss, 1, acc, 502));
+
+    // Back to cell 3: its offset resumed where it left off (was at 4).
+    char* at3_again[2] = { "P.I 3", "P.A 2 0" };
+    CHECK_CALL(process_helper_state(&ss, 2, at3_again, 304));
 
     PASS();
 }
@@ -407,7 +437,7 @@ TEST test_P_ACC_W() {
     // step=2, n=0, offset wraps in [0, 5].
     // offset sequence: 0, 2, 4, wrap(6,0,5)=0, 2, 4, ...
     // returned: 100, 102, 104, 100, 102, 104, ...
-    char* t[1] = { "P.A.W 0 2 0 5 0" };
+    char* t[1] = { "P.A.W 2 0 5 0" };
     CHECK_CALL(process_helper_state(&ss, 1, t, 100));
     CHECK_CALL(process_helper_state(&ss, 1, t, 102));
     CHECK_CALL(process_helper_state(&ss, 1, t, 104));
@@ -426,8 +456,8 @@ TEST test_PN_ACC_family() {
     char* prep[3] = { "P.N 3", "PN 1 0 200", "P.N" };
     CHECK_CALL(process_helper_state(&ss, 3, prep, 3));
 
-    // PN.A pn=1 i=0 step=5 n=0 -> 200, 205, 210
-    char* t[1] = { "PN.A 1 0 5 0" };
+    // PN.A pn=1 step=5 n=0 at pattern 1's current index (0) -> 200, 205, 210
+    char* t[1] = { "PN.A 1 5 0" };
     CHECK_CALL(process_helper_state(&ss, 1, t, 200));
     CHECK_CALL(process_helper_state(&ss, 1, t, 205));
     CHECK_CALL(process_helper_state(&ss, 1, t, 210));
@@ -439,7 +469,7 @@ TEST test_PN_ACC_family() {
     // PN.A.W: offset wraps. Pattern 2.
     char* prep2[2] = { "PN 2 0 50", "PN 2 0" };
     CHECK_CALL(process_helper_state(&ss, 2, prep2, 50));
-    char* tw[1] = { "PN.A.W 2 0 2 0 5 0" };
+    char* tw[1] = { "PN.A.W 2 2 0 5 0" };
     CHECK_CALL(process_helper_state(&ss, 1, tw, 50));
     CHECK_CALL(process_helper_state(&ss, 1, tw, 52));
     CHECK_CALL(process_helper_state(&ss, 1, tw, 54));
@@ -3265,6 +3295,7 @@ SUITE(process_suite) {
     RUN_TEST(test_P_ROT_1);
     RUN_TEST(test_P_ROT_3);
     RUN_TEST(test_P_ACC);
+    RUN_TEST(test_P_ACC_follows_index);
     RUN_TEST(test_P_ACC_W);
     RUN_TEST(test_PN_ACC_family);
     RUN_TEST(test_P_D);

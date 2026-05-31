@@ -2113,10 +2113,11 @@ const tele_op_t op_PN_STEPQ      = MAKE_GET_OP(PN.STEP?,      op_PN_STEPQ_get,  
 ////////////////////////////////////////////////////////////////////////////////
 // P.A family //////////////////////////////////////////////////////////////////
 //
-// Non-destructive per-cell accumulator. Returns P[i] + offset[i] (or a wrapped
-// variant thereof), then advances offset[i] by `step`. If `n > 0`, snaps both
-// offset[i] and the per-cell trigger counter to 0 every n-th call. Pattern
-// values are never modified.
+// Non-destructive per-cell accumulator on the pattern's current play index `i`
+// (P.HERE-style; `i` is not an argument). Returns P[i] + offset[i] (or a
+// wrapped variant thereof), then advances offset[i] by `step`. If `n > 0`,
+// snaps both offset[i] and the per-cell trigger counter to 0 every n-th call.
+// Pattern values are never modified.
 
 // `wrap_offset == true` wraps the per-cell offset into [min, max] each tick;
 // otherwise it grows unbounded (subject to int16_t saturation after ~32 K
@@ -2144,47 +2145,48 @@ static int16_t p_acc_step(scene_state_t *ss, int16_t pn, int16_t idx,
     return result;
 }
 
-// P.A i step n  — unbounded offset
+// P.A step n  — unbounded offset on the active pattern's current play index
 static void op_P_ACC_get(const void *NOTUSED(data), scene_state_t *ss,
                          exec_state_t *NOTUSED(es), command_state_t *cs) {
-    int16_t idx = cs_pop(cs);
     int16_t step = cs_pop(cs);
     int16_t n = cs_pop(cs);
-    cs_push(cs, p_acc_step(ss, ss->variables.p_n, idx, step, n, false, 0, 0));
-}
-
-// PN.A pn i step n
-static void op_PN_ACC_get(const void *NOTUSED(data), scene_state_t *ss,
-                          exec_state_t *NOTUSED(es), command_state_t *cs) {
-    int16_t pn = cs_pop(cs);
-    int16_t idx = cs_pop(cs);
-    int16_t step = cs_pop(cs);
-    int16_t n = cs_pop(cs);
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
     cs_push(cs, p_acc_step(ss, pn, idx, step, n, false, 0, 0));
 }
 
-// P.A.W i step min max n  — offset wraps in [min, max]. `n` is last to
+// PN.A pn step n  — pattern `pn` at its own current play index
+static void op_PN_ACC_get(const void *NOTUSED(data), scene_state_t *ss,
+                          exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = normalise_pn(cs_pop(cs));
+    int16_t step = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, false, 0, 0));
+}
+
+// P.A.W step min max n  — offset wraps in [min, max]. `n` is last to
 // keep the wrap bounds in the same positions as P.+W.
 static void op_P_ACC_W_get(const void *NOTUSED(data), scene_state_t *ss,
                            exec_state_t *NOTUSED(es), command_state_t *cs) {
-    int16_t idx = cs_pop(cs);
     int16_t step = cs_pop(cs);
     int16_t min = cs_pop(cs);
     int16_t max = cs_pop(cs);
     int16_t n = cs_pop(cs);
-    cs_push(cs,
-            p_acc_step(ss, ss->variables.p_n, idx, step, n, true, min, max));
+    int16_t pn = normalise_pn(ss->variables.p_n);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
+    cs_push(cs, p_acc_step(ss, pn, idx, step, n, true, min, max));
 }
 
-// PN.A.W pn i step min max n
+// PN.A.W pn step min max n
 static void op_PN_ACC_W_get(const void *NOTUSED(data), scene_state_t *ss,
                             exec_state_t *NOTUSED(es), command_state_t *cs) {
-    int16_t pn = cs_pop(cs);
-    int16_t idx = cs_pop(cs);
+    int16_t pn = normalise_pn(cs_pop(cs));
     int16_t step = cs_pop(cs);
     int16_t min = cs_pop(cs);
     int16_t max = cs_pop(cs);
     int16_t n = cs_pop(cs);
+    int16_t idx = ss_get_pattern_idx(ss, pn);
     cs_push(cs, p_acc_step(ss, pn, idx, step, n, true, min, max));
 }
 
@@ -2197,10 +2199,10 @@ static void op_ACC_CLR_get(const void *NOTUSED(data), scene_state_t *ss,
 }
 
 // clang-format off
-const tele_op_t op_P_ACC    = MAKE_GET_OP(P.A,     op_P_ACC_get,    3, true);
-const tele_op_t op_PN_ACC   = MAKE_GET_OP(PN.A,    op_PN_ACC_get,   4, true);
-const tele_op_t op_P_ACC_W  = MAKE_GET_OP(P.A.W,   op_P_ACC_W_get,  5, true);
-const tele_op_t op_PN_ACC_W = MAKE_GET_OP(PN.A.W,  op_PN_ACC_W_get, 6, true);
+const tele_op_t op_P_ACC    = MAKE_GET_OP(P.A,     op_P_ACC_get,    2, true);
+const tele_op_t op_PN_ACC   = MAKE_GET_OP(PN.A,    op_PN_ACC_get,   3, true);
+const tele_op_t op_P_ACC_W  = MAKE_GET_OP(P.A.W,   op_P_ACC_W_get,  4, true);
+const tele_op_t op_PN_ACC_W = MAKE_GET_OP(PN.A.W,  op_PN_ACC_W_get, 5, true);
 const tele_op_t op_ACC_CLR  = MAKE_GET_OP(ACC.CLR, op_ACC_CLR_get,  0, false);
 // clang-format on
 

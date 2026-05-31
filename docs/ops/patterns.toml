@@ -268,11 +268,13 @@ prototype = "PN.-W x y z a b"
 short = "decrease the value of pattern `x` at index `y` by `z` and wrap it to `a`..`b` range"
 
 ["P.A"]
-prototype = "P.A x y n"
-short = "non-destructive accumulator: return active pattern[`x`] + per-cell offset, then advance the offset by `y`; if `n` > 0 the offset resets every `n`-th call"
+prototype = "P.A x n"
+short = "non-destructive accumulator: return `P.HERE` (active pattern at its current play index) + per-cell offset, then advance the offset by `x`; if `n` > 0 the offset resets every `n`-th call"
 description = """
-Returns `P x` plus a per-cell accumulator offset, then advances that offset by
-`y`. The pattern value itself is never modified.
+Returns `P.HERE` plus a per-cell accumulator offset, then advances that offset by
+`x`. The accumulator tracks the current play index (like `P.HERE`), so it follows
+the playhead — there is no index argument. The pattern value itself is never
+modified.
 
 Pass `n` = 0 to disable the auto-reset counter; otherwise the offset (and the
 per-cell trigger counter) snap back to 0 every `n`-th call.
@@ -285,16 +287,16 @@ the init script).
 """
 
 ["PN.A"]
-prototype = "PN.A x y z n"
-short = "as `P.A`, but on pattern `x` at index `y` with step `z` and reset count `n`"
+prototype = "PN.A x y n"
+short = "as `P.A`, but on pattern `x` at its own current play index, with step `y` and reset count `n`"
 
 ["P.A.W"]
-prototype = "P.A.W x y a b n"
-short = "as `P.A`, but the per-cell offset wraps in `a`..`b` (inclusive on `a`, exclusive on `b+1` — modular). `n` reset count is last to keep `a`/`b` in the same positions as `P.+W`."
+prototype = "P.A.W x a b n"
+short = "as `P.A` (step `x`), but the per-cell offset wraps in `a`..`b` (inclusive on `a`, exclusive on `b+1` — modular). `n` reset count is last to keep `a`/`b` in the same positions as `P.+W`."
 
 ["PN.A.W"]
-prototype = "PN.A.W x y z a b n"
-short = "as `P.A.W`, but on pattern `x`"
+prototype = "PN.A.W x y a b n"
+short = "as `P.A.W`, but on pattern `x` (step `y`)"
 
 ["ACC.CLR"]
 prototype = "ACC.CLR"
