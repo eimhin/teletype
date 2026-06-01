@@ -37,3 +37,10 @@ short = "get / set the random number generator seed for the `P.RND` and `PN.RND`
 prototype = "MRBL.SD"
 prototype_set = "MRBL.SD x"
 short = "get / set the random number generator seed for the `MRBL.V`, `MRBL.D`, and `MRBL.T` ops"
+
+["CA.SEED"]
+prototype = "CA.SEED v"
+short = "Seeds the cellular-automaton row from `v`. `v = 0` plants a single centre cell; otherwise `v`'s 16 bits are written centred in the row"
+description = """
+`CA.SEED` (re)seeds the `CA` row. `CA.SEED 0` plants the canonical single centre cell (guaranteed alive). A non-zero `v` writes its 16 bits centred in the 32-cell row, giving a deterministic custom starting pattern. Combine with `RND`/`RRAND` for a random seed, e.g. `CA.SEED RND 32767`. Reseeding makes a run reproducible from a known starting point.
+"""

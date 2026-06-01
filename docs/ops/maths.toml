@@ -41,7 +41,7 @@ description = """
 Returns a deterministic pseudo-random value `0..32767` for each `(seed, index)` pair `(x, y)`. Identical inputs always give the same output, so sequences survive scene save/load and power-cycle; distinct seeds give independent (decorrelated) sequences. Unlike `RAND`, it keeps no hidden generator state.
 """
 
-[SRND.R]
+["SRND.R"]
 prototype = "SRND.R x y z"
 short = "ranged seeded random: `SRND x y` folded into the range `0` to `z` inclusive"
 description = """
@@ -408,13 +408,6 @@ M: IF CA 90: TR.P 1      # main gate (advances the automaton)
    IF CA.X 6: TR.P 2     # correlated voice, same generation
    IF CA.X -6: TR.P 3
 ```
-"""
-
-["CA.SEED"]
-prototype = "CA.SEED v"
-short = "Seeds the cellular-automaton row from `v`. `v = 0` plants a single centre cell; otherwise `v`'s 16 bits are written centred in the row"
-description = """
-`CA.SEED` (re)seeds the `CA` row. `CA.SEED 0` plants the canonical single centre cell (guaranteed alive). A non-zero `v` writes its 16 bits centred in the 32-cell row, giving a deterministic custom starting pattern. Combine with `RND`/`RRAND` for a random seed, e.g. `CA.SEED RND 32767`. Reseeding makes a run reproducible from a known starting point.
 """
 
 [POLY]

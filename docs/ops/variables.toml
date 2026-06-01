@@ -178,3 +178,12 @@ description="""
 get / set the variable `K`, each script gets its own `K` variable, so if you call
 a script from another script you can still use and modify `K` without affecting the calling script.
 """
+
+[H]
+prototype = "H"
+prototype_set = "H x"
+short = """get / set the variable `H`"""
+description="""
+get / set the variable `H`, each script gets its own `H` variable, so if you call
+a script from another script you can still use and modify `H` without affecting the calling script.
+"""
