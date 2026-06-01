@@ -101,6 +101,7 @@ CSRCS = \
 	../src/ops/i2c2midi.c					\
 	../src/ops/init.c					\
 	../src/ops/justfriends.c				\
+	../src/ops/marbles.c					\
 	../src/ops/maths.c					\
 	../src/ops/matrixarchate.c				\
 	../src/ops/meadowphysics.c				\

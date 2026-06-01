@@ -17,6 +17,7 @@
 #include "ops/i2c2midi.h"
 #include "ops/init.h"
 #include "ops/justfriends.h"
+#include "ops/marbles.h"
 #include "ops/maths.h"
 #include "ops/matrixarchate.h"
 #include "ops/meadowphysics.h"
@@ -322,7 +323,10 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     // seed
     &op_SEED, &op_RAND_SEED, &op_SYM_RAND_SD, &op_SYM_R_SD, &op_TOSS_SEED,
     &op_SYM_TOSS_SD, &op_PROB_SEED, &op_SYM_PROB_SD, &op_DRUNK_SEED,
-    &op_SYM_DRUNK_SD, &op_P_SEED, &op_SYM_P_SD,
+    &op_SYM_DRUNK_SD, &op_P_SEED, &op_SYM_P_SD, &op_MRBL_SD,
+
+    // marbles
+    &op_MRBL_V, &op_MRBL_D, &op_MRBL_T,
 
     &op_MI_SYM_DOLLAR, &op_MI_LN, &op_MI_LNV, &op_MI_LV, &op_MI_LVV, &op_MI_LO,
     &op_MI_LC, &op_MI_LCC, &op_MI_LCCV, &op_MI_NL, &op_MI_N, &op_MI_NV,

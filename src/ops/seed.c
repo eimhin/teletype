@@ -31,8 +31,9 @@ const tele_op_t op_PROB_SEED	= MAKE_SEED_OP(PROB.SEED, rand_states.s.prob);
 const tele_op_t op_SYM_PROB_SD	= MAKE_SEED_ALIAS_OP(PROB.SD, rand_states.s.prob);  
 const tele_op_t op_DRUNK_SEED	= MAKE_SEED_OP(DRUNK.SEED, rand_states.s.drunk);  
 const tele_op_t op_SYM_DRUNK_SD	= MAKE_SEED_ALIAS_OP(DRUNK.SD, rand_states.s.drunk);  
-const tele_op_t op_P_SEED		= MAKE_SEED_OP(P.SEED, rand_states.s.pattern);  
+const tele_op_t op_P_SEED		= MAKE_SEED_OP(P.SEED, rand_states.s.pattern);
 const tele_op_t op_SYM_P_SD		= MAKE_SEED_ALIAS_OP(P.SD, rand_states.s.pattern);
+const tele_op_t op_MRBL_SD		= MAKE_SEED_OP(MRBL.SD, rand_states.s.marbles);
 // clang-format on
 
 static void op_peek_seed_i16(const void *data, scene_state_t *ss,

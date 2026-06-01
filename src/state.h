@@ -25,7 +25,7 @@
 #define SCRIPT_MAX_COMMANDS 6
 #define EXEC_DEPTH 8
 #define WHILE_DEPTH 10000
-#define RAND_STATES_COUNT 5
+#define RAND_STATES_COUNT 6
 
 #define GRID_GROUP_COUNT 64
 #define GRID_MAX_DIMENSION 16
@@ -267,6 +267,7 @@ typedef union {
         tele_rand_t toss;
         tele_rand_t pattern;
         tele_rand_t drunk;
+        tele_rand_t marbles;
     } s;
 
     tele_rand_t a[RAND_STATES_COUNT];

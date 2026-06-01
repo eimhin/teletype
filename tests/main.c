@@ -2,6 +2,7 @@
 
 #include "drum_helpers_tests.h"
 #include "greatest/greatest.h"
+#include "marbles_tests.h"
 #include "match_token_tests.h"
 #include "op_mod_tests.h"
 #include "parser_tests.h"
@@ -60,6 +61,7 @@ int main(int argc, char **argv) {
 
     RUN_SUITE(match_token_suite);
     RUN_SUITE(op_mod_suite);
+    RUN_SUITE(marbles_suite);
     RUN_SUITE(parser_suite);
     RUN_SUITE(process_suite);
     RUN_SUITE(turtle_suite);

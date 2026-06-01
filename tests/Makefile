@@ -3,6 +3,7 @@ CFLAGS = -std=c99 -g -Wall -fno-common -DSIM -I../src -I../libavr32/src
 
 tests: main.o \
 	log.o \
+	marbles_tests.o \
 	match_token_tests.o op_mod_tests.o \
 	parser_tests.o process_tests.o \
 	turtle_tests.o \
@@ -17,6 +18,7 @@ tests: main.o \
 	../src/ops/er301.o ../src/ops/fader.o \
 	../src/ops/hardware.o ../src/ops/i2c.o ../src/ops/midi.o \
 	../src/ops/justfriends.o ../src/ops/meadowphysics.o \
+	../src/ops/marbles.o \
 	../src/ops/metronome.o ../src/ops/maths.o ../src/ops/orca.o \
 	../src/ops/patterns.o ../src/ops/queue.o ../src/ops/stack.o \
 	../src/ops/telex.o ../src/ops/variables.o  ../src/ops/whitewhale.o \

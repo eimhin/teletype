@@ -32,3 +32,8 @@ prototype = "P.SEED"
 prototype_set = "P.SEED x"
 aliases = ["P.SD"]
 short = "get / set the random number generator seed for the `P.RND` and `PN.RND` ops"
+
+["MRBL.SD"]
+prototype = "MRBL.SD"
+prototype_set = "MRBL.SD x"
+short = "get / set the random number generator seed for the `MRBL.V`, `MRBL.D`, and `MRBL.T` ops"

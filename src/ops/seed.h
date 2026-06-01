@@ -15,5 +15,6 @@ extern const tele_op_t op_DRUNK_SEED;
 extern const tele_op_t op_SYM_DRUNK_SD;
 extern const tele_op_t op_P_SEED;
 extern const tele_op_t op_SYM_P_SD;
+extern const tele_op_t op_MRBL_SD;
 
 #endif

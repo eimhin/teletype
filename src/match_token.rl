@@ -1053,6 +1053,12 @@
         "DRUNK.SD"      => { MATCH_OP(E_OP_SYM_DRUNK_SD); };
         "P.SEED"      => { MATCH_OP(E_OP_P_SEED); };
         "P.SD"          => { MATCH_OP(E_OP_SYM_P_SD); };
+        "MRBL.SD"     => { MATCH_OP(E_OP_MRBL_SD); };
+
+        # marbles
+        "MRBL.V"      => { MATCH_OP(E_OP_MRBL_V); };
+        "MRBL.D"      => { MATCH_OP(E_OP_MRBL_D); };
+        "MRBL.T"      => { MATCH_OP(E_OP_MRBL_T); };
 
         # MIDI
         "MI.$"        => { MATCH_OP(E_OP_MI_SYM_DOLLAR); };

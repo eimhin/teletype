@@ -48,6 +48,27 @@ description = """
 As `SRND`, but folds the result into the range `0` to `z` inclusive (when `z > 0`). When `z <= 0`, returns the full `0..32767` value unchanged.
 """
 
+["MRBL.V"]
+prototype = "MRBL.V p dv spr"
+short = "déjà-vu random value `0..spr`, looped through pattern `p`"
+description = """
+Marbles-style random looping backed by pattern bank `p` (`0..7`). Each call advances pattern `p`'s playhead over its first `P.L` cells (wrapping), and with probability `100 - dv` overwrites the current cell with a fresh random value in `0..spr`; otherwise it recalls the stored value. `dv 0` is pure random (always refresh); `dv 100` is a locked loop of length `P.L`; intermediate `dv` gives a slowly-evolving loop. Because the loop lives in the pattern it is editable in TRACKER mode and saved with the scene. Draws from a dedicated rng stream seeded by `MRBL.SD`.
+"""
+
+["MRBL.D"]
+prototype = "MRBL.D p dv deg"
+short = "déjà-vu scale degree `1..deg`, looped through pattern `p` (feed into `N.B`)"
+description = """
+As `MRBL.V`, but fresh values are 1-indexed scale degrees in `1..deg`, intended to feed straight into `N.B` (e.g. `N.B MRBL.D 1 B 7`). `deg 7` spans roughly one heptatonic octave, `14` two, etc.; `N.B` ascends octaves without wrapping.
+"""
+
+["MRBL.T"]
+prototype = "MRBL.T p dv bias"
+short = "déjà-vu gate `0`/`1`, looped through pattern `p`"
+description = """
+As `MRBL.V`, but fresh values are gates: `1` with probability `bias` percent, else `0`. Produces a looping random gate stream whose density follows `bias` and whose repetition follows `dv`.
+"""
+
 [TOSS]
 prototype = "TOSS"
 short = "randomly return `0` or `1`"
