@@ -54,6 +54,7 @@ __pycache__/
 /docs/teletype.html
 /docs/cheatsheet/*
 !/docs/cheatsheet/cheatsheet.tex
+!/docs/cheatsheet/cheatsheet_new.tex
 /docs/testServe/
 
 # Claude Code — personal config (settings.local.json is per-user allowlist; rest of .claude/ is team-shared)
