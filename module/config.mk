@@ -62,6 +62,7 @@ TARGET = $(THIS).elf
 # List of C source files.
 CSRCS = \
 	../module/main.c					\
+	../module/custom_tracker_mode.c				\
 	../module/edit_mode.c   				\
 	../module/flash.c					\
 	../module/gitversion.c					\
@@ -91,6 +92,7 @@ CSRCS = \
 	../src/ops/chord.c					\
 	../src/ops/controlflow.c				\
 	../src/ops/crow.c				\
+	../src/ops/custom_pattern.c				\
 	../src/ops/delay.c					\
 	../src/ops/disting.c					\
 	../src/ops/earthsea.c					\
@@ -260,7 +262,7 @@ CPPFLAGS = -D BOARD=USER_BOARD -D UHD_ENABLE
 
 # Extra flags to use when linking
 # NVRAM size may need to change if additional data is to be stored in scenes.
-LDFLAGS = -Wl,-e,_trampoline,--defsym=__flash_nvram_size__=176K
+LDFLAGS = -Wl,-e,_trampoline,--defsym=__flash_nvram_size__=156K
 
 # Pre- and post-build commands
 PREBUILD_CMD =

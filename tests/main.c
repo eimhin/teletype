@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "chord_tests.h"
+#include "custom_pattern_tests.h"
 #include "drum_helpers_tests.h"
 #include "greatest/greatest.h"
 #include "marbles_tests.h"
@@ -63,6 +64,7 @@ int main(int argc, char **argv) {
     RUN_SUITE(match_token_suite);
     RUN_SUITE(op_mod_suite);
     RUN_SUITE(chord_suite);
+    RUN_SUITE(custom_pattern_suite);
     RUN_SUITE(marbles_suite);
     RUN_SUITE(parser_suite);
     RUN_SUITE(process_suite);

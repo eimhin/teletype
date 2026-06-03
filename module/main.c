@@ -36,6 +36,7 @@
 // this
 #include "chaos.h"
 #include "conf_board.h"
+#include "custom_tracker_mode.h"
 #include "edit_mode.h"
 #include "flash.h"
 #include "globals.h"
@@ -418,6 +419,10 @@ void handler_PollADC(int32_t data) {
         process_pattern_knob(adc[1], mod_key);
         ss_set_param(&scene_state, adc[1] << 2);
     }
+    else if (mode == M_CUSTOM_TRACKER) {
+        process_custom_tracker_knob(adc[1], mod_key);
+        ss_set_param(&scene_state, adc[1] << 2);
+    }
     else if (mode == M_PRESET_R && !(grid_connected && grid_control_mode)) {
         uint8_t preset = adc[1] >> 6;
         uint8_t deadzone = preset & 1;
@@ -522,6 +527,9 @@ void handler_ScreenRefresh(int32_t data) {
 
     switch (mode) {
         case M_PATTERN: screen_dirty = screen_refresh_pattern(); break;
+        case M_CUSTOM_TRACKER:
+            screen_dirty = screen_refresh_custom_tracker();
+            break;
         case M_PRESET_W: screen_dirty = screen_refresh_preset_w(); break;
         case M_PRESET_R: screen_dirty = screen_refresh_preset_r(); break;
         case M_HELP: screen_dirty = screen_refresh_help(); break;
@@ -793,6 +801,10 @@ void set_mode(tele_mode_t m) {
             set_help_mode();
             mode = M_HELP;
             break;
+        case M_CUSTOM_TRACKER:
+            set_custom_tracker_mode();
+            mode = M_CUSTOM_TRACKER;
+            break;
     }
     if (mode != M_HELP) flash_update_last_mode(mode);
 }
@@ -801,7 +813,8 @@ void set_mode(tele_mode_t m) {
 void set_last_mode() {
     if (mode == last_mode) return;
 
-    if (last_mode == M_LIVE || last_mode == M_EDIT || last_mode == M_PATTERN)
+    if (last_mode == M_LIVE || last_mode == M_EDIT || last_mode == M_PATTERN ||
+        last_mode == M_CUSTOM_TRACKER)
         set_mode(last_mode);
     else
         set_mode(M_LIVE);
@@ -842,6 +855,9 @@ void process_keypress(uint8_t key, uint8_t mod_key, bool is_held_key,
             process_live_keys(key, mod_key, is_held_key, false, &scene_state);
             break;
         case M_PATTERN: process_pattern_keys(key, mod_key, is_held_key); break;
+        case M_CUSTOM_TRACKER:
+            process_custom_tracker_keys(key, mod_key, is_held_key);
+            break;
         case M_PRESET_W:
             process_preset_w_keys(key, mod_key, is_held_key);
             break;
@@ -862,6 +878,8 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
             set_mode(M_EDIT);
         else if (mode == M_EDIT)
             set_mode(M_PATTERN);
+        else if (mode == M_PATTERN)
+            set_mode(M_CUSTOM_TRACKER);
         else
             set_mode(M_LIVE);
         return true;
@@ -952,6 +970,11 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
     else if (match_no_mod(m, k, HID_PRINTSCREEN) ||
              match_no_mod(m, k, HID_F12)) {
         if (mode != M_LIVE) { set_mode(M_LIVE); }
+        return true;
+    }
+    // <scroll lock>: jump to custom tracker mode
+    else if (match_no_mod(m, k, HID_SCROLL_LOCK)) {
+        if (mode != M_CUSTOM_TRACKER) { set_mode(M_CUSTOM_TRACKER); }
         return true;
     }
     else { return false; }

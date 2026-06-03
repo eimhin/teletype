@@ -10,6 +10,7 @@
 #define STATE_PATTERNS 4
 #define STATE_GRID 5
 #define STATE_PATTERN_DURATIONS 6
+#define STATE_CUSTOM_PATTERN 7
 
 uint8_t grid_state = 0;
 uint16_t grid_count = 0;
@@ -173,6 +174,68 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
         }
     }
 
+    // custom pattern (#C). Per-column metadata rows (len, wrap, start, end)
+    // then CUSTOM_PATTERN_LENGTH value rows, 8 columns each — same table shape
+    // as #P. Column playhead idx is runtime, not serialized (as with #P).
+    // Only emitted when any cell holds non-default state — keeps existing
+    // presets byte-identical through round-trip and is forward-compatible
+    // (older firmware treats #C as an unknown section letter and skips it).
+    bool any_cp_set = false;
+    for (int b = 0; b < CUSTOM_PATTERN_WIDTH && !any_cp_set; b++) {
+        if (ss_get_cp_len(scene, b) != 0 || ss_get_cp_wrap(scene, b) != 1 ||
+            ss_get_cp_start(scene, b) != 0 ||
+            ss_get_cp_end(scene, b) != CUSTOM_PATTERN_LENGTH - 1) {
+            any_cp_set = true;
+            break;
+        }
+        for (int l = 0; l < CUSTOM_PATTERN_LENGTH; l++) {
+            if (ss_get_cp_val(scene, b, l) != 0) {
+                any_cp_set = true;
+                break;
+            }
+        }
+    }
+    if (any_cp_set) {
+        stream->write_char(stream->data, '\n');
+        stream->write_char(stream->data, '#');
+        stream->write_char(stream->data, 'C');
+        stream->write_char(stream->data, '\n');
+
+        for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+            itoa(ss_get_cp_len(scene, b), input, 10);
+            stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
+            stream->write_char(stream->data,
+                               b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+        }
+        for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+            itoa(ss_get_cp_wrap(scene, b), input, 10);
+            stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
+            stream->write_char(stream->data,
+                               b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+        }
+        for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+            itoa(ss_get_cp_start(scene, b), input, 10);
+            stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
+            stream->write_char(stream->data,
+                               b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+        }
+        for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+            itoa(ss_get_cp_end(scene, b), input, 10);
+            stream->write_buffer(stream->data, (uint8_t*)input, strlen(input));
+            stream->write_char(stream->data,
+                               b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+        }
+        for (int l = 0; l < CUSTOM_PATTERN_LENGTH; l++) {
+            for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+                itoa(ss_get_cp_val(scene, b, l), input, 10);
+                stream->write_buffer(stream->data, (uint8_t*)input,
+                                     strlen(input));
+                stream->write_char(stream->data,
+                                   b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+            }
+        }
+    }
+
     // serialize grid
 
     char fvalue[36];
@@ -259,6 +322,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             }
             else if (c == 'P') { s2 = STATE_PATTERNS; }
             else if (c == 'D') { s2 = STATE_PATTERN_DURATIONS; }
+            else if (c == 'C') { s2 = STATE_CUSTOM_PATTERN; }
             else if (c == 'G') {
                 grid_state = grid_count = 0;
                 s2 = STATE_GRID;
@@ -440,6 +504,42 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                 if (c == '\n') {
                     if (p) l++;
                     if (l >= PATTERN_LENGTH) s = -1;
+                    b = 0;
+                    p = 0;
+                }
+            }
+            else {
+                if (c == '-')
+                    neg = -1;
+                else if (c >= '0' && c <= '9') { num = num * 10 + (c - 48); }
+                p++;
+            }
+            continue;
+        }
+
+        // CUSTOM PATTERN (#C)
+        if (s == STATE_CUSTOM_PATTERN) {
+            // l wrap start end then CUSTOM_PATTERN_LENGTH value rows, each
+            // CUSTOM_PATTERN_WIDTH tab-separated columns. Mirrors #P.
+
+            if (c == '\n' || c == '\t') {
+                if (b < CUSTOM_PATTERN_WIDTH) {
+                    if (l > 3 && (l - 4) < CUSTOM_PATTERN_LENGTH) {
+                        ss_set_cp_val(scene, b, l - 4, neg * num);
+                    }
+                    else if (l == 0) { ss_set_cp_len(scene, b, num); }
+                    else if (l == 1) { ss_set_cp_wrap(scene, b, num); }
+                    else if (l == 2) { ss_set_cp_start(scene, b, num); }
+                    else if (l == 3) { ss_set_cp_end(scene, b, num); }
+                }
+
+                b++;
+                num = 0;
+                neg = 1;
+
+                if (c == '\n') {
+                    if (p) l++;
+                    if (l > 4 + CUSTOM_PATTERN_LENGTH) s = -1;
                     b = 0;
                     p = 0;
                 }

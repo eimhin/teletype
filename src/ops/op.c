@@ -7,6 +7,7 @@
 #include "ops/chord.h"
 #include "ops/controlflow.h"
 #include "ops/crow.h"
+#include "ops/custom_pattern.h"
 #include "ops/delay.h"
 #include "ops/disting.h"
 #include "ops/earthsea.h"
@@ -44,7 +45,7 @@
 
 // If you edit this array, you need to run 'utils/op_enums.py' to update the
 // values in 'op_enum.h' so that the order matches.
-const tele_op_t* tele_ops[E_OP__LENGTH] = {
+const tele_op_t *tele_ops[E_OP__LENGTH] = {
     // variables
     &op_A, &op_B, &op_C, &op_D, &op_DRUNK, &op_DRUNK_MAX, &op_DRUNK_MIN,
     &op_DRUNK_WRAP, &op_FLIP, &op_I, &op_O, &op_O_INC, &op_O_MAX, &op_O_MIN,
@@ -335,7 +336,12 @@ const tele_op_t* tele_ops[E_OP__LENGTH] = {
     &op_MI_CLKD, &op_MI_CLKR,
 
     // chord / key
-    &op_KEY, &op_KEY_C, &op_KEY_V};
+    &op_KEY, &op_KEY_C, &op_KEY_V,
+
+    // custom pattern (XP)
+    &op_XP, &op_XP_HERE, &op_XP_I, &op_XP_L, &op_XP_WRAP, &op_XP_START,
+    &op_XP_END, &op_XP_NEXT, &op_XP_NEXT_ALL
+};
 
 /////////////////////////////////////////////////////////////////
 // MODS /////////////////////////////////////////////////////////

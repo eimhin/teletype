@@ -1,0 +1,72 @@
+["XP"]
+prototype = "XP c i"
+prototype_set = "XP c i x"
+short = "get/set the value at column `c`, index `i` of the custom pattern"
+description = """
+Get or set the value at column `c` (0..7), index `i` (0..15) of the single global custom pattern (8 columns × 16 steps). Column first, then index — mirroring `PN <pattern> <index>`. `c` is clamped to a valid column and `i` to the column's length (negative indices count from the end, as with `P`).
+
+```
+XP 0 0 60     // column 0, step 0 = 60
+XP 0 0        // -> 60
+```
+"""
+
+["XP.HERE"]
+prototype = "XP.HERE c"
+prototype_set = "XP.HERE c x"
+short = "get/set the value at column `c`'s current index"
+description = """
+Get or set the value at column `c`'s current playhead index (set with `XP.I` / advanced with `XP.NEXT`). Equivalent to `XP c (XP.I c)`.
+"""
+
+["XP.I"]
+prototype = "XP.I c"
+prototype_set = "XP.I c i"
+short = "get/set the playhead index of column `c`"
+description = """
+Get or set the playhead index of column `c`. The set value is clamped to the column's length; writing it resets the playhead so the next `XP.NEXT` starts cleanly.
+"""
+
+["XP.L"]
+prototype = "XP.L c"
+prototype_set = "XP.L c x"
+short = "get/set the length of column `c`"
+description = """
+Get or set the active length of column `c`, clamped to 0..16. Columns are independent, so each can have its own length.
+"""
+
+["XP.WRAP"]
+prototype = "XP.WRAP c"
+prototype_set = "XP.WRAP c x"
+short = "get/set whether column `c` wraps at its END / length"
+
+["XP.START"]
+prototype = "XP.START c"
+prototype_set = "XP.START c i"
+short = "get/set the playback start index of column `c`"
+
+["XP.END"]
+prototype = "XP.END c"
+prototype_set = "XP.END c i"
+short = "get/set the playback end index of column `c`"
+
+["XP.NEXT"]
+prototype = "XP.NEXT c"
+prototype_set = "XP.NEXT c x"
+short = "advance column `c`'s index then get/set the value there"
+description = """
+Advance column `c`'s playhead one step — honouring that column's `XP.START`, `XP.END`, `XP.WRAP` and `XP.L` — then return the value at the new index (or, in set form, write `x` there). Mirrors `P.NEXT` for a single column.
+"""
+
+["XP.NEXT.ALL"]
+prototype = "XP.NEXT.ALL"
+short = "advance every column's index by one step"
+description = """
+Advance all eight columns' playheads by one step each, every column honouring its own start/end/wrap. Returns nothing. Use it to step a whole chord or a bank of parallel sequences from one trigger, then read the columns with `XP.HERE 0`, `XP.HERE 1`, ….
+
+```
+#1
+XP.NEXT.ALL                    // step all 8 columns
+I2M.NT XP.HERE 0 100 500       // voice 0's new note, vel 100, 500ms
+```
+"""

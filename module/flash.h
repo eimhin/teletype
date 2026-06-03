@@ -7,7 +7,7 @@
 #include "line_editor.h"
 #include "teletype.h"
 
-#define SCENE_SLOTS 12
+#define SCENE_SLOTS 10
 #define BUTTON_STATE_SIZE (GRID_BUTTON_COUNT >> 3)
 
 typedef struct {
@@ -19,6 +19,7 @@ typedef struct {
 typedef struct {
     scene_script_t scripts[EDITABLE_SCRIPT_COUNT];  // Exclude TEMP script
     scene_pattern_t patterns[PATTERN_COUNT];
+    scene_custom_pattern_t custom_pattern;
     grid_data_t grid_data;
     char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
 } nvram_scene_t;

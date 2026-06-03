@@ -1011,6 +1011,15 @@ typedef enum {
     E_OP_KEY,
     E_OP_KEY_C,
     E_OP_KEY_V,
+    E_OP_XP,
+    E_OP_XP_HERE,
+    E_OP_XP_I,
+    E_OP_XP_L,
+    E_OP_XP_WRAP,
+    E_OP_XP_START,
+    E_OP_XP_END,
+    E_OP_XP_NEXT,
+    E_OP_XP_NEXT_ALL,
     E_OP__LENGTH,
 } tele_op_idx_t;
 

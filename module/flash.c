@@ -16,7 +16,9 @@
 // key forces flash_prepare() to reseed on first boot after upgrade.
 // 0x25: scene_pattern_t gained dur[PATTERN_LENGTH] for the duration-aware
 // P.STEP family — wipes existing scenes on first boot.
-#define FIRSTRUN_KEY 0x25
+// 0x26: nvram_scene_t gained scene_custom_pattern_t (the XP 8-column x 16-step
+// custom pattern) — wipes existing scenes on first boot.
+#define FIRSTRUN_KEY 0x26
 
 static grid_data_t grid_data;
 
@@ -88,6 +90,8 @@ void flash_write(uint8_t preset_no, scene_state_t *scene,
                   ss_scripts_size(EDITABLE_SCRIPT_COUNT), true);
     flashc_memcpy((void *)&f.scenes[preset_no].patterns, ss_patterns_ptr(scene),
                   ss_patterns_size(), true);
+    flashc_memcpy((void *)&f.scenes[preset_no].custom_pattern,
+                  ss_custom_pattern_ptr(scene), ss_custom_pattern_size(), true);
     pack_grid(scene);
     flashc_memcpy((void *)&f.scenes[preset_no].grid_data, &grid_data,
                   sizeof(grid_data_t), true);
@@ -105,6 +109,8 @@ void flash_read(uint8_t preset_no, scene_state_t *scene,
     if (init_pattern) {
         memcpy(ss_patterns_ptr(scene), &f.scenes[preset_no].patterns,
                ss_patterns_size());
+        memcpy(ss_custom_pattern_ptr(scene),
+               &f.scenes[preset_no].custom_pattern, ss_custom_pattern_size());
     }
     if (init_grid) {
         memcpy(&grid_data, &f.scenes[preset_no].grid_data, sizeof(grid_data_t));

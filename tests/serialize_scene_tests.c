@@ -361,6 +361,86 @@ TEST test_deserialize_fragment_script_basic() {
     PASS();
 }
 
+// Round-trip the XP custom pattern across all columns with distinct per-column
+// len/wrap/start/end and values, ensuring every column survives the #C section.
+TEST test_round_trip_custom_pattern() {
+    scene_state_t scene_a, scene_b;
+    ss_init(&scene_a);
+    ss_init(&scene_b);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    for (int c = 0; c < CUSTOM_PATTERN_WIDTH; c++) {
+        ss_set_cp_len(&scene_a, c, 1 + c);
+        ss_set_cp_wrap(&scene_a, c, c & 1);
+        ss_set_cp_start(&scene_a, c, c);
+        ss_set_cp_end(&scene_a, c, c + 1);
+        for (int i = 0; i < CUSTOM_PATTERN_LENGTH; i++)
+            ss_set_cp_val(&scene_a, c, i, (int16_t)(c * 100 + i));
+    }
+
+    char buffer[32768];
+    memset(buffer, 0, sizeof(buffer));
+    stringsource out_ss = { .buffer = buffer, .length = 0, .position = 0 };
+    test_string_writer.data = (void*)&out_ss;
+    serialize_scene(&test_string_writer, &scene_a, &text);
+
+    stringsource in_ss = { .buffer = buffer,
+                           .length = out_ss.length,
+                           .position = 0 };
+    test_string_reader.data = (void*)&in_ss;
+    deserialize_scene(&test_string_reader, &scene_b, &text);
+
+    for (int c = 0; c < CUSTOM_PATTERN_WIDTH; c++) {
+        ASSERT_EQ(1 + c, ss_get_cp_len(&scene_b, c));
+        ASSERT_EQ(c & 1, ss_get_cp_wrap(&scene_b, c));
+        ASSERT_EQ(c, ss_get_cp_start(&scene_b, c));
+        ASSERT_EQ(c + 1, ss_get_cp_end(&scene_b, c));
+        for (int i = 0; i < CUSTOM_PATTERN_LENGTH; i++)
+            ASSERT_EQ((int16_t)(c * 100 + i), ss_get_cp_val(&scene_b, c, i));
+    }
+    PASS();
+}
+
+// Back-compat contract: a default (untouched) custom pattern must NOT emit a
+// #C section, and a scene text without #C must load to clean custom-pattern
+// defaults (so old scenes / scenes from older firmware are unaffected).
+TEST test_custom_pattern_default_omits_section() {
+    scene_state_t scene_a, scene_b;
+    ss_init(&scene_a);
+    ss_init(&scene_b);
+
+    char text[SCENE_TEXT_LINES][SCENE_TEXT_CHARS];
+    memset(text, 0, SCENE_TEXT_LINES * SCENE_TEXT_CHARS);
+
+    char buffer[32768];
+    memset(buffer, 0, sizeof(buffer));
+    stringsource out_ss = { .buffer = buffer, .length = 0, .position = 0 };
+    test_string_writer.data = (void*)&out_ss;
+    serialize_scene(&test_string_writer, &scene_a, &text);
+
+    // a default custom pattern emits no #C section
+    ASSERT(strstr(buffer, "#C") == NULL);
+
+    // a #C-less scene loads to clean defaults (matches ss_custom_pattern_init)
+    stringsource in_ss = { .buffer = buffer,
+                           .length = out_ss.length,
+                           .position = 0 };
+    test_string_reader.data = (void*)&in_ss;
+    deserialize_scene(&test_string_reader, &scene_b, &text);
+
+    for (int c = 0; c < CUSTOM_PATTERN_WIDTH; c++) {
+        ASSERT_EQ(0, ss_get_cp_len(&scene_b, c));
+        ASSERT_EQ(1, ss_get_cp_wrap(&scene_b, c));
+        ASSERT_EQ(0, ss_get_cp_start(&scene_b, c));
+        ASSERT_EQ(CUSTOM_PATTERN_LENGTH - 1, ss_get_cp_end(&scene_b, c));
+        for (int i = 0; i < CUSTOM_PATTERN_LENGTH; i++)
+            ASSERT_EQ(0, ss_get_cp_val(&scene_b, c, i));
+    }
+    PASS();
+}
+
 SUITE(serialize_scene_suite) {
     log_init();
     init_serializers();
@@ -385,6 +465,8 @@ SUITE(serialize_scene_suite) {
     RUN_TESTp(test_round_trip_file, "../presets/tt09.txt",
               "./test_output/tt09.txt");
     RUN_TEST(test_round_trip_all_patterns);
+    RUN_TEST(test_round_trip_custom_pattern);
+    RUN_TEST(test_custom_pattern_default_omits_section);
     RUN_TEST(test_deserialize_legacy_4pattern_scene);
     RUN_TEST(test_round_trip_pattern_durations);
     RUN_TEST(test_deserialize_without_pd_leaves_default_durs);

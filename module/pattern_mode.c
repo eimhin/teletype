@@ -1,6 +1,7 @@
 #include "pattern_mode.h"
 
 // this
+#include "custom_tracker_mode.h"
 #include "globals.h"
 #include "keyboard_helper.h"
 
@@ -70,6 +71,8 @@ static inline void pm_set_cell(scene_state_t *ss, size_t pn, size_t idx,
 // teletype_io.h
 void tele_pattern_updated() {
     dirty = true;
+    // also flag the custom tracker so it repaints if it is the live view
+    custom_tracker_mark_dirty();
 }
 
 void set_pattern_mode() {

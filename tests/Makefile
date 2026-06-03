@@ -4,6 +4,7 @@ CFLAGS = -std=c99 -g -Wall -fno-common -DSIM -I../src -I../libavr32/src
 tests: main.o \
 	log.o \
 	chord_tests.o \
+	custom_pattern_tests.o \
 	marbles_tests.o \
 	match_token_tests.o op_mod_tests.o \
 	parser_tests.o process_tests.o \
@@ -28,7 +29,7 @@ tests: main.o \
 	../src/ops/matrixarchate.o ../src/ops/wslash.o ../src/ops/seed.o \
         ../src/ops/disting.o \
 	../src/ops/wslashtape.o ../src/ops/wslashsynth.o ../src/ops/wslashdelay.o \
-	../src/ops/crow.o ../src/ops/i2c2midi.o \
+	../src/ops/crow.o ../src/ops/custom_pattern.o ../src/ops/i2c2midi.o \
 	../libavr32/src/euclidean/data.o ../libavr32/src/euclidean/euclidean.o \
 	../libavr32/src/music.o ../libavr32/src/util.o ../libavr32/src/random.o
 

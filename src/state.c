@@ -16,6 +16,7 @@ void ss_init(scene_state_t *ss) {
     ss_cal_init(ss);
     ss_variables_init(ss);
     ss_patterns_init(ss);
+    ss_custom_pattern_init(ss);
     ss_grid_init(ss);
     ss_rand_init(ss);
     ss_midi_init(ss);
@@ -118,6 +119,20 @@ void ss_pattern_init(scene_state_t *ss, size_t pattern_no) {
     ss->p_dir[pattern_no] = 0;
     ss->p_stride[pattern_no] = 1;
     ss->p_travel_dir[pattern_no] = 1;
+}
+
+void ss_custom_pattern_init(scene_state_t *ss) {
+    scene_custom_pattern_t *cp = &ss->custom_pattern;
+    for (size_t col = 0; col < CUSTOM_PATTERN_WIDTH; col++) {
+        cp->idx[col] = 0;
+        cp->len[col] = 0;
+        cp->wrap[col] = 1;
+        cp->start[col] = 0;
+        cp->end[col] = CUSTOM_PATTERN_LENGTH - 1;
+    }
+    for (size_t i = 0; i < CUSTOM_PATTERN_LENGTH; i++)
+        for (size_t col = 0; col < CUSTOM_PATTERN_WIDTH; col++)
+            cp->val[i][col] = 0;
 }
 
 // grid
@@ -349,6 +364,64 @@ scene_pattern_t *ss_patterns_ptr(scene_state_t *ss) {
 
 size_t ss_patterns_size() {
     return sizeof(scene_pattern_t) * PATTERN_COUNT;
+}
+
+// XP custom pattern getters and setters (keyed by column)
+
+int16_t ss_get_cp_idx(scene_state_t *ss, size_t col) {
+    return ss->custom_pattern.idx[col];
+}
+
+void ss_set_cp_idx(scene_state_t *ss, size_t col, int16_t i) {
+    ss->custom_pattern.idx[col] = i;
+}
+
+int16_t ss_get_cp_len(scene_state_t *ss, size_t col) {
+    return ss->custom_pattern.len[col];
+}
+
+void ss_set_cp_len(scene_state_t *ss, size_t col, int16_t l) {
+    ss->custom_pattern.len[col] = l;
+}
+
+uint16_t ss_get_cp_wrap(scene_state_t *ss, size_t col) {
+    return ss->custom_pattern.wrap[col];
+}
+
+void ss_set_cp_wrap(scene_state_t *ss, size_t col, uint16_t wrap) {
+    ss->custom_pattern.wrap[col] = wrap;
+}
+
+int16_t ss_get_cp_start(scene_state_t *ss, size_t col) {
+    return ss->custom_pattern.start[col];
+}
+
+void ss_set_cp_start(scene_state_t *ss, size_t col, int16_t start) {
+    ss->custom_pattern.start[col] = start;
+}
+
+int16_t ss_get_cp_end(scene_state_t *ss, size_t col) {
+    return ss->custom_pattern.end[col];
+}
+
+void ss_set_cp_end(scene_state_t *ss, size_t col, int16_t end) {
+    ss->custom_pattern.end[col] = end;
+}
+
+int16_t ss_get_cp_val(scene_state_t *ss, size_t col, size_t idx) {
+    return ss->custom_pattern.val[idx][col];
+}
+
+void ss_set_cp_val(scene_state_t *ss, size_t col, size_t idx, int16_t val) {
+    ss->custom_pattern.val[idx][col] = val;
+}
+
+scene_custom_pattern_t *ss_custom_pattern_ptr(scene_state_t *ss) {
+    return &ss->custom_pattern;
+}
+
+size_t ss_custom_pattern_size() {
+    return sizeof(scene_custom_pattern_t);
 }
 
 // script manipulation

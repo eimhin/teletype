@@ -254,6 +254,15 @@
         "KEY.C"       => { MATCH_OP(E_OP_KEY_C); };
         "KEY.V"       => { MATCH_OP(E_OP_KEY_V); };
         "KEY"         => { MATCH_OP(E_OP_KEY); };
+        "XP.NEXT.ALL" => { MATCH_OP(E_OP_XP_NEXT_ALL); };
+        "XP.NEXT"     => { MATCH_OP(E_OP_XP_NEXT); };
+        "XP.HERE"     => { MATCH_OP(E_OP_XP_HERE); };
+        "XP.START"    => { MATCH_OP(E_OP_XP_START); };
+        "XP.WRAP"     => { MATCH_OP(E_OP_XP_WRAP); };
+        "XP.END"      => { MATCH_OP(E_OP_XP_END); };
+        "XP.I"        => { MATCH_OP(E_OP_XP_I); };
+        "XP.L"        => { MATCH_OP(E_OP_XP_L); };
+        "XP"          => { MATCH_OP(E_OP_XP); };
         "AVG"         => { MATCH_OP(E_OP_AVG); };
         "EQ"          => { MATCH_OP(E_OP_EQ); };
         "NE"          => { MATCH_OP(E_OP_NE); };

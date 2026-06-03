@@ -35,6 +35,7 @@ OPS_SECTIONS = [
     "variables",
     "hardware",
     "patterns",
+    "custom_pattern",
     "controlflow",
     "maths",
     "metronome",

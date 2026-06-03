@@ -22,6 +22,11 @@
 #define STACK_OP_SIZE 16
 #define PATTERN_COUNT 8
 #define PATTERN_LENGTH 64
+// XP custom pattern: a single 8-column wide, 16-step deep grid. Each column is
+// an independent track with its own idx/len/wrap/start/end (mirrors the 8
+// PATTERN_COUNT patterns), but they share one tracker view and one depth.
+#define CUSTOM_PATTERN_WIDTH 8
+#define CUSTOM_PATTERN_LENGTH 16
 #define SCRIPT_MAX_COMMANDS 6
 #define EXEC_DEPTH 8
 #define WHILE_DEPTH 10000
@@ -273,10 +278,24 @@ typedef union {
     tele_rand_t a[RAND_STATES_COUNT];
 } scene_rand_t;
 
+// XP custom pattern. One global instance per scene. Per-column metadata
+// arrays (len/wrap/start/end persisted, idx runtime like the P family), plus a
+// shared [index][column] value grid. Edited from the custom tracker view and
+// the XP op family.
+typedef struct {
+    int16_t idx[CUSTOM_PATTERN_WIDTH];
+    uint16_t len[CUSTOM_PATTERN_WIDTH];
+    uint16_t wrap[CUSTOM_PATTERN_WIDTH];
+    int16_t start[CUSTOM_PATTERN_WIDTH];
+    int16_t end[CUSTOM_PATTERN_WIDTH];
+    int16_t val[CUSTOM_PATTERN_LENGTH][CUSTOM_PATTERN_WIDTH];
+} scene_custom_pattern_t;
+
 typedef struct {
     bool initializing;
     scene_variables_t variables;
     scene_pattern_t patterns[PATTERN_COUNT];
+    scene_custom_pattern_t custom_pattern;
     scene_delay_t delay;
     scene_stack_op_t stack_op;
     scene_script_t scripts[TOTAL_SCRIPT_COUNT];
@@ -364,6 +383,24 @@ extern void ss_set_pattern_stride(scene_state_t *ss, size_t pattern,
                                   int8_t stride);
 extern scene_pattern_t *ss_patterns_ptr(scene_state_t *ss);
 extern size_t ss_patterns_size(void);
+
+// XP custom pattern accessors (keyed by column 0..CUSTOM_PATTERN_WIDTH-1)
+extern void ss_custom_pattern_init(scene_state_t *ss);
+extern int16_t ss_get_cp_idx(scene_state_t *ss, size_t col);
+extern void ss_set_cp_idx(scene_state_t *ss, size_t col, int16_t i);
+extern int16_t ss_get_cp_len(scene_state_t *ss, size_t col);
+extern void ss_set_cp_len(scene_state_t *ss, size_t col, int16_t l);
+extern uint16_t ss_get_cp_wrap(scene_state_t *ss, size_t col);
+extern void ss_set_cp_wrap(scene_state_t *ss, size_t col, uint16_t wrap);
+extern int16_t ss_get_cp_start(scene_state_t *ss, size_t col);
+extern void ss_set_cp_start(scene_state_t *ss, size_t col, int16_t start);
+extern int16_t ss_get_cp_end(scene_state_t *ss, size_t col);
+extern void ss_set_cp_end(scene_state_t *ss, size_t col, int16_t end);
+extern int16_t ss_get_cp_val(scene_state_t *ss, size_t col, size_t idx);
+extern void ss_set_cp_val(scene_state_t *ss, size_t col, size_t idx,
+                          int16_t val);
+extern scene_custom_pattern_t *ss_custom_pattern_ptr(scene_state_t *ss);
+extern size_t ss_custom_pattern_size(void);
 
 uint8_t ss_get_script_len(scene_state_t *ss, uint8_t idx);
 const tele_command_t *ss_get_script_command(scene_state_t *ss,

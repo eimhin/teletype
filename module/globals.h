@@ -28,7 +28,8 @@ typedef enum {
     M_PATTERN,
     M_PRESET_W,
     M_PRESET_R,
-    M_HELP
+    M_HELP,
+    M_CUSTOM_TRACKER
 } tele_mode_t;
 
 // device config

@@ -25,7 +25,7 @@ ROOT_DIR = THIS_FILE.parent.parent
 OP_DOCS_DIR = ROOT_DIR / "docs" / "ops"
 
 # toml section files the new ops live in (searched for each op name).
-SECTION_FILES = ["patterns", "maths", "seed"]
+SECTION_FILES = ["patterns", "custom_pattern", "maths", "seed", "chord"]
 
 # Ops added on the `eimhin` branch (vs main), grouped by feature. Order within
 # each group is the display order on the sheet.
@@ -53,6 +53,11 @@ FEATURE_GROUPS = [
         "P.STEP", "PN.STEP", "P.STEP.NEW", "PN.STEP.NEW",
         "P.STEP?", "PN.STEP?",
         "P.D", "PN.D", "P.D.HERE", "PN.D.HERE", "P.D.RND", "PN.D.RND"]),
+    ("Custom pattern", [
+        "XP", "XP.HERE", "XP.I", "XP.L", "XP.WRAP", "XP.START", "XP.END",
+        "XP.NEXT", "XP.NEXT.ALL"]),
+    ("Chord / Key", [
+        "KEY", "KEY.C", "KEY.V"]),
 ]
 
 
