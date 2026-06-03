@@ -4,6 +4,7 @@
 
 #include "helpers.h"
 #include "ops/ansible.h"
+#include "ops/chord.h"
 #include "ops/controlflow.h"
 #include "ops/crow.h"
 #include "ops/delay.h"
@@ -43,7 +44,7 @@
 
 // If you edit this array, you need to run 'utils/op_enums.py' to update the
 // values in 'op_enum.h' so that the order matches.
-const tele_op_t *tele_ops[E_OP__LENGTH] = {
+const tele_op_t* tele_ops[E_OP__LENGTH] = {
     // variables
     &op_A, &op_B, &op_C, &op_D, &op_DRUNK, &op_DRUNK_MAX, &op_DRUNK_MIN,
     &op_DRUNK_WRAP, &op_FLIP, &op_I, &op_O, &op_O_INC, &op_O_MAX, &op_O_MIN,
@@ -319,7 +320,6 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_I2M_B_CLR, &op_I2M_B_MODE, &op_I2M_C_QN, &op_I2M_C_QV, &op_I2M_MUTE,
     &op_I2M_MUTE_POUND, &op_I2M_SOLO, &op_I2M_SOLO_POUND, &op_I2M_TEST,
 
-
     // seed
     &op_SEED, &op_RAND_SEED, &op_SYM_RAND_SD, &op_SYM_R_SD, &op_TOSS_SEED,
     &op_SYM_TOSS_SD, &op_PROB_SEED, &op_SYM_PROB_SD, &op_DRUNK_SEED,
@@ -332,8 +332,10 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_MI_LC, &op_MI_LCC, &op_MI_LCCV, &op_MI_NL, &op_MI_N, &op_MI_NV,
     &op_MI_V, &op_MI_VV, &op_MI_OL, &op_MI_O, &op_MI_CL, &op_MI_C, &op_MI_CC,
     &op_MI_CCV, &op_MI_LCH, &op_MI_NCH, &op_MI_OCH, &op_MI_CCH, &op_MI_LE,
-    &op_MI_CLKD, &op_MI_CLKR
-};
+    &op_MI_CLKD, &op_MI_CLKR,
+
+    // chord / key
+    &op_KEY, &op_KEY_C, &op_KEY_V};
 
 /////////////////////////////////////////////////////////////////
 // MODS /////////////////////////////////////////////////////////

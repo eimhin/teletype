@@ -5,7 +5,7 @@ OBJ = tt.o ../src/teletype.o ../src/command.o ../src/helpers.o ../src/drum_helpe
 	../src/every.o ../src/match_token.o ../src/scanner.o \
 	../src/scale.o ../src/scene_serialization.o \
 	../src/state.o ../src/table.o ../src/turtle.o ../src/chaos.o \
-	../src/ops/op.o ../src/ops/ansible.c ../src/ops/controlflow.o \
+	../src/ops/op.o ../src/ops/ansible.c ../src/ops/chord.o ../src/ops/controlflow.o \
 	../src/ops/delay.o ../src/ops/earthsea.o ../src/ops/hardware.o \
 	../src/ops/justfriends.o ../src/ops/meadowphysics.o ../src/ops/turtle.o \
 	../src/ops/marbles.o \

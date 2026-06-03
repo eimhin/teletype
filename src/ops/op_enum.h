@@ -1008,6 +1008,9 @@ typedef enum {
     E_OP_MI_LE,
     E_OP_MI_CLKD,
     E_OP_MI_CLKR,
+    E_OP_KEY,
+    E_OP_KEY_C,
+    E_OP_KEY_V,
     E_OP__LENGTH,
 } tele_op_idx_t;
 

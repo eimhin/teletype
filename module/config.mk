@@ -88,6 +88,7 @@ CSRCS = \
 	../src/chaos.c					\
 	../src/ops/op.c						\
 	../src/ops/ansible.c					\
+	../src/ops/chord.c					\
 	../src/ops/controlflow.c				\
 	../src/ops/crow.c				\
 	../src/ops/delay.c					\

@@ -63,7 +63,8 @@ OPS_SECTIONS = [
     "wslashsynth",
     "wslashtape",
     "crow",
-    "i2c2midi"
+    "i2c2midi",
+    "chord"
 ]
 
 

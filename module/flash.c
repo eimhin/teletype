@@ -119,6 +119,7 @@ void flash_read(uint8_t preset_no, scene_state_t *scene,
     scene->variables.time = 0;
 
     if (init_i2c_op_address) scene->i2c_op_address = -1;
+    scene->chord_bank = 0;
     ss_midi_init(scene);
 }
 

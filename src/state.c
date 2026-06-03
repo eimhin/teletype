@@ -38,6 +38,7 @@ void ss_init(scene_state_t *ss) {
     ss->variables.time = 0;
     ss->variables.time_act = 1;
     ss->i2c_op_address = -1;
+    ss->chord_bank = 0;
 }
 
 void ss_variables_init(scene_state_t *ss) {

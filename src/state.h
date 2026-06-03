@@ -286,6 +286,7 @@ typedef struct {
     scene_rand_t rand_states;
     cal_data_t cal;
     int8_t i2c_op_address;
+    int8_t chord_bank;  // active KEY bank for KEY.C / KEY.V (see ops/chord.c)
     scene_midi_t midi;
     // Per-cell accumulator state for the P.A* op family. Runtime-only —
     // intentionally not persisted in nvram_scene_t. BSS-zeroed at boot.

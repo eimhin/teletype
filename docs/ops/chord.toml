@@ -1,0 +1,48 @@
+["KEY"]
+prototype = "KEY n"
+short = "select chord bank (key) `n` as the active context and return its scale"
+description = """
+Select chord bank (key) `n` (0..3) as the **active context** and return its scale as a reverse-binary decimal (the value `I2M.C.B` consumes). The selected bank is held as op state and read by `KEY.C` and `KEY.V` until the next `KEY` call. `n` is clamped to a valid bank. The active bank defaults to `0` (Major) at init and on scene load, so `KEY.C` / `KEY.V` work before any `KEY` call.
+
+Each bank bundles, all rooted on C: a scale, a palette of C-rooted chord shapes that fit the scale (`KEY.C`), and an ordered list of voice-led voicings over a held C (`KEY.V`).
+
+Banks:
+
+- `0` — Major (scale `2741`)
+- `1` — Natural minor (scale `1453`)
+- `2` — Major pentatonic (scale `661`)
+- `3` — Minor pentatonic (scale `1193`)
+
+Typical use selects the key once in the init script and reloads it live:
+
+```
+#I
+I2M.C.B 8 KEY 0     // select Major + load its scale into chord 8
+```
+"""
+
+["KEY.C"]
+prototype = "KEY.C t"
+short = "return the `t`-th C-rooted chord shape from the active KEY bank"
+description = """
+Return the `t`-th C-rooted chord **shape** from the active `KEY` bank as a reverse-binary decimal. Use it to pick a chord quality and move it with a diatonic transpose such as `I2M.C.TRP`. `t` is clamped to the bank's shape count. Each bank exposes 7 shapes (indices `0..6`); for Major these are: maj triad, maj7, maj6, sus2, sus4, add9, maj9.
+
+```
+#1
+I2M.C.B 1 KEY.C 0   // major triad from the active key
+I2M.C.TRP 1 2       // diatonic transpose
+```
+"""
+
+["KEY.V"]
+prototype = "KEY.V i"
+short = "return the `i`-th voicing from the active KEY bank, ordered intimate -> wide"
+description = """
+Return the `i`-th **voicing** from the active `KEY` bank as a reverse-binary decimal. Unlike `KEY.C`, the voicings are full chords over a held C pedal, ordered **intimate -> lush -> wide**: low `i` is a close pad, high `i` opens to a wide spread. Within each intensity tier the steps voice-lead (a single voice moves), so scrolling `i` glides. It is a browse / scroll control, not meant for transposing. `i` is clamped to the bank's voicing count (Major 19, Natural minor 18, both pentatonics 14).
+
+```
+#2
+I2M.C.B 1 KEY.V X   // browse the active key's voicings by index X
+I2M.C 1 60 100      // X low = intimate, X high = wide
+```
+"""
