@@ -8,4 +8,4 @@ Each of the **8 columns is its own independent track**, with its own playhead in
 
 This makes `XP` well suited to chord and multi-voice work: read a column per voice (`XP.NEXT.ALL` then `XP.HERE 0`, `XP.HERE 1`, …), or treat each column as an independent parallel sequence.
 
-To edit the custom pattern, switch to the **custom tracker** view: cycle to it with `<tab>` (live → edit → pattern → custom tracker), or jump straight to it with `<scroll lock>`. All 8 columns are shown at once and the 16 steps scroll vertically (8 visible at a time) with the same key bindings as pattern mode; each column draws its own playhead and start/end markers. The custom pattern is saved with the scene.
+To edit the custom pattern, switch to the **custom tracker** view with `<scroll lock>` (it has its own dedicated shortcut and is not part of the `<tab>` mode cycle). All 8 columns are shown at once and the 16 steps scroll vertically (8 visible at a time) with the same key bindings as pattern mode; each column draws its own playhead and start/end markers. The custom pattern is saved with the scene.

@@ -872,14 +872,14 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
     if (is_held_key)  // none of these want to work with held keys
         return false;
 
-    // <tab>: change modes, live to edit to pattern and back
+    // <tab>: change modes, live to edit to pattern and back. The custom tracker
+    // is intentionally NOT in this cycle; it has its own dedicated shortcut
+    // (<scroll lock>).
     if (match_no_mod(m, k, HID_TAB)) {
         if (mode == M_LIVE)
             set_mode(M_EDIT);
         else if (mode == M_EDIT)
             set_mode(M_PATTERN);
-        else if (mode == M_PATTERN)
-            set_mode(M_CUSTOM_TRACKER);
         else
             set_mode(M_LIVE);
         return true;

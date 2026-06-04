@@ -28,10 +28,12 @@
 #define CT_LENGTH CUSTOM_PATTERN_LENGTH
 #define CT_VISIBLE 8
 #define CT_MAX_OFFSET (CT_LENGTH - CT_VISIBLE)
-// Right-edge x for column c's right-aligned value text. 8 columns packed at a
-// 14px pitch after the row-index gutter; the start/end + playhead markers sit
-// 2px to the right of each column's text.
-#define CT_COLX(c) (24 + (c) * 14)
+// Right-edge x for column c's right-aligned value text. 8 columns on a 15px
+// pitch, right-anchored to match the regular pattern tracker: column 7's text
+// ends at x=124 and its start/end + playhead marker (CT_COLX(7)+2) at x=126,
+// leaving x=127 empty exactly as pattern_mode does. Markers sit 2px right of
+// the text; any slack falls left of column 0, by the flush-left scrollbar.
+#define CT_COLX(c) (19 + (c)*15)
 // Scrollbar: the full 64px bar represents CT_LENGTH indices.
 #define CT_PX_PER_IDX (64 / CT_LENGTH)
 
@@ -418,8 +420,6 @@ uint8_t screen_refresh_custom_tracker() {
     char s[32];
     for (uint8_t y = 0; y < CT_VISIBLE; y++) {
         region_fill(&line[y], 0);
-        itoa(y + offset, s, 10);
-        font_string_region_clip_right(&line[y], s, 6, 0, 0x1, 0);
 
         for (uint8_t c = 0; c < CT_WIDTH; c++) {
             uint8_t a = 1;
@@ -444,11 +444,11 @@ uint8_t screen_refresh_custom_tracker() {
     }
 
     if (editing_number) {
-        font_string_region_clip_right(&line[base], "      ", CT_COLX(column), 0,
+        font_string_region_clip_right(&line[base], "   ", CT_COLX(column), 0,
                                       0xf, 0);
         if (edit_negative && edit_buffer == 0)
-            font_string_region_clip_right(&line[base], "    -0", CT_COLX(column),
-                                          0, 0xf, 0);
+            font_string_region_clip_right(&line[base], "-0", CT_COLX(column), 0,
+                                          0xf, 0);
         else {
             itoa(edit_buffer, s, 10);
             font_string_region_clip_right(&line[base], s, CT_COLX(column), 0,
@@ -463,11 +463,11 @@ uint8_t screen_refresh_custom_tracker() {
     // scrollbar: dim dotted full-height bar, with the visible window of
     // CT_VISIBLE indices highlighted brighter.
     for (uint8_t py = 0; py < 64; py += 2)
-        line[py >> 3].data[(py & 0x7) * 128 + 8] = 1;
+        line[py >> 3].data[(py & 0x7) * 128] = 1;
     for (uint8_t i = offset; i < offset + CT_VISIBLE; i++) {
         for (uint8_t d = 0; d < CT_PX_PER_IDX; d++) {
             uint8_t py = i * CT_PX_PER_IDX + d;
-            if (py < 64) line[py >> 3].data[(py & 0x7) * 128 + 8] = 6;
+            if (py < 64) line[py >> 3].data[(py & 0x7) * 128] = 6;
         }
     }
 
