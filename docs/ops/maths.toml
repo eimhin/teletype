@@ -579,6 +579,24 @@ N.BX 2 5 -3              ==>  set scale at index 2 to F-lydian using preset
 """
 
 
+["VN.B"]
+prototype = "VN.B d"
+short = "get degree `d` of the `N.B` scale as a semitone number (a value usable by `N`) rather than as a CV value"
+description = """
+Read-only companion to `N.B`. Returns the same scale degree `d`, but as a semitone number (the integer `N.B` converts internally) instead of a `1V/OCT` value. It shares `N.B`'s scale, so configure the scale with the set form of `N.B` (or `N.BX 0`) and read it either as CV with `N.B d` or as a note number with `VN.B d`.
+
+This avoids the lossy `VN N.B d` round-trip and is exact for in-scale degrees: `N VN.B d` equals `N.B d`.
+
+Examples:
+```
+N.B 0 R101011010101   ==>  set scale to C-major (default)
+VN.B 1                ==>  1st degree as a note number (0, i.e. C)
+VN.B 3                ==>  3rd degree as a note number (4, i.e. E)
+CV 1 N VN.B 3         ==>  same CV as CV 1 N.B 3
+```
+"""
+
+
 ["N.S"]
 prototype = "N.S r s d"
 short = "Note Scale operator, `r` is the root note (`0-127`), `s` is the scale (`0-8`) and `d` is the degree (`1-7`), returns a value from the `N` table."

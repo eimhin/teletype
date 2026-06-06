@@ -3366,6 +3366,59 @@ TEST test_ERD_BB_negative_step() {
     PASS();
 }
 
+// VN.B returns the scale degree as a semitone number (the integer N.B
+// computes internally) rather than as a v/oct value. It is read-only and
+// shares N.B's scale config (n_scale_bits[0] / n_scale_root[0]).
+TEST test_VN_B_chromatic_scale() {
+    scene_state_t ss;
+    ss_init(&ss);
+    // chromatic: every semitone is in scale, so degree d -> semitone d-1
+    ss.variables.n_scale_bits[0] = 0b111111111111;
+    ss.variables.n_scale_root[0] = 0;
+
+    char* l1[1] = { "VN.B 1" };
+    CHECK_CALL(process_helper_state(&ss, 1, l1, 0));
+    char* l3[1] = { "VN.B 3" };
+    CHECK_CALL(process_helper_state(&ss, 1, l3, 2));
+    PASS();
+}
+
+TEST test_VN_B_root_offset() {
+    scene_state_t ss;
+    ss_init(&ss);
+    ss.variables.n_scale_bits[0] = 0b111111111111;
+    ss.variables.n_scale_root[0] = 5;  // root transposes the result
+
+    char* l[1] = { "VN.B 1" };
+    CHECK_CALL(process_helper_state(&ss, 1, l, 5));
+    PASS();
+}
+
+TEST test_VN_B_degree_zero_below_root() {
+    scene_state_t ss;
+    ss_init(&ss);
+    ss.variables.n_scale_bits[0] = 0b111111111111;
+    ss.variables.n_scale_root[0] = 0;
+
+    // degree 0 is one scale step below degree 1
+    char* l[1] = { "VN.B 0" };
+    CHECK_CALL(process_helper_state(&ss, 1, l, -1));
+    PASS();
+}
+
+TEST test_VN_B_matches_N_B_volts() {
+    // The defining property: converting VN.B's semitone back to volts (N)
+    // yields exactly the v/oct N.B returns for the same degree.
+    scene_state_t ss;
+    ss_init(&ss);
+    ss.variables.n_scale_bits[0] = 0b101011010101;  // ionian (major)
+    ss.variables.n_scale_root[0] = 0;
+
+    char* l[1] = { "EQ N VN.B 5 N.B 5" };
+    CHECK_CALL(process_helper_state(&ss, 1, l, 1));
+    PASS();
+}
+
 TEST test_SRND() {
     // Stability pin: SRND is a pure function, so a fixed (seed, index) must
     // always produce this exact value (computed independently). A change here
@@ -3611,4 +3664,8 @@ SUITE(process_suite) {
     RUN_TEST(test_BB_determinism_and_seed_wrap);
     RUN_TEST(test_BB_density_alive);
     RUN_TEST(test_ERD_BB_negative_step);
+    RUN_TEST(test_VN_B_chromatic_scale);
+    RUN_TEST(test_VN_B_root_offset);
+    RUN_TEST(test_VN_B_degree_zero_below_root);
+    RUN_TEST(test_VN_B_matches_N_B_volts);
 }

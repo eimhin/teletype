@@ -268,6 +268,7 @@ typedef enum {
     E_OP_N_CS,
     E_OP_N_B,
     E_OP_N_BX,
+    E_OP_VN_B,
     E_OP_V,
     E_OP_VV,
     E_OP_ER,

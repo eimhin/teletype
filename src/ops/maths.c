@@ -139,6 +139,8 @@ static void op_N_BX_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
 static void op_N_BX_set(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
+static void op_VN_B_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                        command_state_t *cs);
 static void op_V_get(const void *data, scene_state_t *ss, exec_state_t *es,
                      command_state_t *cs);
 static void op_VV_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -272,6 +274,7 @@ const tele_op_t op_N_C   = MAKE_GET_OP(N.C      , op_N_C_get    , 3, true);
 const tele_op_t op_N_CS  = MAKE_GET_OP(N.CS     , op_N_CS_get   , 4, true);
 const tele_op_t op_N_B   = MAKE_GET_SET_OP(N.B, op_N_B_get,op_N_B_set, 1, true);
 const tele_op_t op_N_BX  = MAKE_GET_SET_OP(N.BX, op_N_BX_get, op_N_BX_set, 2, true);
+const tele_op_t op_VN_B  = MAKE_GET_OP(VN.B, op_VN_B_get, 1, true);
 const tele_op_t op_V     = MAKE_GET_OP(V       , op_V_get       , 1, true);
 const tele_op_t op_VV    = MAKE_GET_OP(VV      , op_VV_get      , 1, true);
 const tele_op_t op_ER    = MAKE_GET_OP(ER      , op_ER_get      , 3, true);
@@ -416,8 +419,12 @@ static int16_t chord_n_s_to_bitmask(int16_t scale_n_s, int16_t degree,
     return scale_bits;
 }
 
-static int16_t get_degree_in_bitmask_scale(int16_t scale_bits,
-                                           int16_t transpose, int16_t degree) {
+// Returns the scale degree as a (transposed) semitone number. This is the
+// value get_degree_in_bitmask_scale converts to v/oct on its final line; the
+// VN.B op exposes it directly.
+static int16_t get_degree_semitone_in_bitmask_scale(int16_t scale_bits,
+                                                    int16_t transpose,
+                                                    int16_t degree) {
     int16_t note = 0;
 
     if (degree > 0) {
@@ -440,7 +447,13 @@ static int16_t get_degree_in_bitmask_scale(int16_t scale_bits,
         }
         note--;
     }
-    note = note + transpose;
+    return note + transpose;
+}
+
+static int16_t get_degree_in_bitmask_scale(int16_t scale_bits,
+                                           int16_t transpose, int16_t degree) {
+    int16_t note =
+        get_degree_semitone_in_bitmask_scale(scale_bits, transpose, degree);
     if (note > 0) { return table_n[note]; }
     else { return -table_n[-note]; }
 }
@@ -1459,6 +1472,17 @@ static void op_N_B_set(const void *NOTUSED(data), scene_state_t *ss,
     else { scale_bits = scale_bits & 0b111111111111; }
 
     ss->variables.n_scale_bits[0] = scale_bits;
+}
+
+static void op_VN_B_get(const void *NOTUSED(data), scene_state_t *ss,
+                        exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t degree = cs_pop(cs);
+
+    int16_t scale_bits = ss->variables.n_scale_bits[0];
+    int16_t transpose = ss->variables.n_scale_root[0];
+
+    cs_push(cs, get_degree_semitone_in_bitmask_scale(scale_bits, transpose,
+                                                     degree));
 }
 
 static void op_N_BX_get(const void *NOTUSED(data), scene_state_t *ss,
