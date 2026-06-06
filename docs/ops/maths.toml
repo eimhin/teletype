@@ -49,24 +49,24 @@ As `SRND`, but folds the result into the range `0` to `z` inclusive (when `z > 0
 """
 
 ["MRBL.V"]
-prototype = "MRBL.V p dv spr"
-short = "déjà-vu random value `0..spr`, looped through pattern `p`"
+prototype = "MRBL.V p d s"
+short = "déjà-vu random value `0..s` looped through pattern `p`, repeating each cell with probability `d`%"
 description = """
-Marbles-style random looping backed by pattern bank `p` (`0..7`). Each call advances pattern `p`'s playhead over its first `P.L` cells (wrapping), and with probability `100 - dv` overwrites the current cell with a fresh random value in `0..spr`; otherwise it recalls the stored value. `dv 0` is pure random (always refresh); `dv 100` is a locked loop of length `P.L`; intermediate `dv` gives a slowly-evolving loop. Because the loop lives in the pattern it is editable in TRACKER mode and saved with the scene. Draws from a dedicated rng stream seeded by `MRBL.SD`.
+Marbles-style random looping backed by pattern bank `p` (`0..7`). Each call advances pattern `p`'s playhead over its first `P.L` cells (wrapping), and with probability `100 - d` overwrites the current cell with a fresh random value in `0..s`; otherwise it recalls the stored value. `d 0` is pure random (always refresh); `d 100` is a locked loop of length `P.L`; intermediate `d` gives a slowly-evolving loop. Because the loop lives in the pattern it is editable in TRACKER mode and saved with the scene. Draws from a dedicated rng stream seeded by `MRBL.SD`.
 """
 
 ["MRBL.D"]
-prototype = "MRBL.D p dv deg"
-short = "déjà-vu scale degree `1..deg`, looped through pattern `p` (feed into `N.B`)"
+prototype = "MRBL.D p d g"
+short = "déjà-vu scale degree `1..g` looped through pattern `p`, repeating each cell with probability `d`% (feed into `N.B`)"
 description = """
-As `MRBL.V`, but fresh values are 1-indexed scale degrees in `1..deg`, intended to feed straight into `N.B` (e.g. `N.B MRBL.D 1 B 7`). `deg 7` spans roughly one heptatonic octave, `14` two, etc.; `N.B` ascends octaves without wrapping.
+As `MRBL.V`, but fresh values are 1-indexed scale degrees in `1..g`, intended to feed straight into `N.B` (e.g. `N.B MRBL.D 1 B 7`). `g 7` spans roughly one heptatonic octave, `14` two, etc.; `N.B` ascends octaves without wrapping.
 """
 
 ["MRBL.T"]
-prototype = "MRBL.T p dv bias"
-short = "déjà-vu gate `0`/`1`, looped through pattern `p`"
+prototype = "MRBL.T p d b"
+short = "déjà-vu gate (`1` at density `b`%) looped through pattern `p`, repeating each cell with probability `d`%"
 description = """
-As `MRBL.V`, but fresh values are gates: `1` with probability `bias` percent, else `0`. Produces a looping random gate stream whose density follows `bias` and whose repetition follows `dv`.
+As `MRBL.V`, but fresh values are gates: `1` with probability `b` percent, else `0`. Produces a looping random gate stream whose density follows `b` and whose repetition follows `d`.
 """
 
 [TOSS]
@@ -381,10 +381,10 @@ The velocity helper gives velocity values (0-16383) at each step. The values are
 """
 
 [CA]
-prototype = "CA rule"
-short = "Cellular-automaton rhythm. Advances one generation using Wolfram `rule` (`0-255`) and returns the centre cell (`0` or `1`)"
+prototype = "CA r"
+short = "Cellular-automaton rhythm. Advances one generation using Wolfram rule `r` (`0-255`) and returns the centre cell (`0` or `1`)"
 description = """
-`CA` is a rhythm generator based on an elementary (Wolfram 1D) cellular automaton: a single `rule` number (`0-255`) is the whole character of the rhythm. A row of 32 cells lives in memory; each time you call `CA` it computes the next generation — every cell's new value is decided by itself plus its two (wrap-around) neighbours, looked up in the 8 bits of `rule` — and returns the centre cell as a `0`/`1` gate. Drop it into a metro:
+`CA` is a rhythm generator based on an elementary (Wolfram 1D) cellular automaton: a single rule number `r` (`0-255`) is the whole character of the rhythm. A row of 32 cells lives in memory; each time you call `CA` it computes the next generation — every cell's new value is decided by itself plus its two (wrap-around) neighbours, looked up in the 8 bits of `r` — and returns the centre cell as a `0`/`1` gate. Drop it into a metro:
 
 ```
 M: IF CA 90: TR.P 1
@@ -392,16 +392,16 @@ M: IF CA 90: TR.P 1
 
 Different rules give wildly different but structured behaviour — Rule 90 draws fractal (Sierpinski) patterns, Rule 30 is chaotic, Rule 110 is famously complex and never settles into an obvious loop. With 32 cyclic cells the period is effectively non-repeating for musical purposes.
 
-`rule` is masked to its low 8 bits, so out-of-range or modulated values wrap into `0-255` rather than erroring.
+`r` is masked to its low 8 bits, so out-of-range or modulated values wrap into `0-255` rather than erroring.
 
 The automaton is one global instance (like `DRUNK`). If the row ever dies to all-zero (permanent silence), a single centre cell is automatically replanted so a metro-driven `CA` never gets stuck silent (a fully saturated all-ones row, by contrast, is a valid dense state and is left alone). Use `CA.SEED` to (re)seed it, and `CA.X` to read other cells of the same generation as correlated rhythm voices. The row is runtime state and is not saved with the scene; it resets to a single centre cell on `INIT`.
 """
 
 ["CA.X"]
-prototype = "CA.X off"
-short = "Reads the cellular-automaton cell at `off` cells from the centre (wraps mod 32) without advancing, returns `0` or `1`"
+prototype = "CA.X o"
+short = "Reads the cellular-automaton cell at `o` cells from the centre (wraps mod 32) without advancing, returns `0` or `1`"
 description = """
-`CA.X` reads a cell of the **current** `CA` row without advancing the automaton, so one automaton can drive several *correlated* rhythm voices from the same generation. `off` is an offset from the centre cell (`CA.X 0` is the same cell `CA` returns) and wraps mod 32, so negative and large offsets are fine.
+`CA.X` reads a cell of the **current** `CA` row without advancing the automaton, so one automaton can drive several *correlated* rhythm voices from the same generation. `o` is an offset from the centre cell (`CA.X 0` is the same cell `CA` returns) and wraps mod 32, so negative and large offsets are fine.
 
 ```
 M: IF CA 90: TR.P 1      # main gate (advances the automaton)
@@ -457,7 +457,7 @@ At `s = 0` the fill is 1 and swells to `f` at the midpoint of each breath. Keep 
 
 ["ERD.W"]
 prototype = "ERD.W f l h s"
-short = "Wandering Euclidean: like `ERD`, but the fill jumps to a new random level in `1..f` every `h` steps and holds. Returns `0` or `1`"
+short = "Wandering Euclidean of length `l` read at step `s`: like `ERD`, but the fill jumps to a new random level in `1..f` every `h` steps and holds. Returns `0` or `1`"
 description = """
 `ERD.W` is a Euclidean rhythm whose fill **wanders**: every `h` steps it jumps to a new pseudo-random density in `1..f` and holds it until the next jump (sample-and-hold). This gives an organic, never-quite-repeating drift rather than the smooth swell of `ERD`. It is deterministic (the random level is derived from the step), so it is pure and resettable.
 
@@ -469,15 +469,15 @@ Out-of-range arguments clamp to a musical result. Use `ERD` for a predictable sw
 """
 
 [BB]
-prototype = "BB seed s"
-short = "Bytebeat rhythm: `seed` selects a bitwise formula; returns a spaced trigger on the rising edge of the formula at step `s`. Returns `0` or `1`"
+prototype = "BB x s"
+short = "Bytebeat rhythm: `x` selects a bitwise formula; returns a spaced trigger on the rising edge of the formula at step `s`. Returns `0` or `1`"
 description = """
-`BB` turns a "bytebeat" (a tiny bitwise formula of time) into a rhythm. `seed` picks one of several built-in formulas, each with its own character and density, giving lots of structured-but-quirky variety from a single number. The output is the **rising edge** of the formula, so triggers are always spaced -- there are never two hits on consecutive steps. It is a pure function of `s`, so it is resettable.
+`BB` turns a "bytebeat" (a tiny bitwise formula of time) into a rhythm. `x` picks one of several built-in formulas, each with its own character and density, giving lots of structured-but-quirky variety from a single number. The output is the **rising edge** of the formula, so triggers are always spaced -- there are never two hits on consecutive steps. It is a pure function of `s`, so it is resettable.
 
- - `seed` selects the formula (wraps, so any integer is valid)
+ - `x` selects the formula (wraps, so any integer is valid)
  - `s` is the step
 
-Densities vary by seed from very sparse to busy. `BB` is a pure trigger source -- combine it with the other rhythm ops to layer textures.
+Densities vary by `x` from very sparse to busy. `BB` is a pure trigger source -- combine it with the other rhythm ops to layer textures.
 """
 
 [BPM]
