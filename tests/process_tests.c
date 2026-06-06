@@ -996,7 +996,7 @@ TEST test_P_MOTIF_determinism() {
     scene_state_t ss1, ss2;
     ss_init(&ss1);
     ss_init(&ss2);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 42" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 42" };
     CHECK_CALL(motif_run(&ss1, 3, setup));
     CHECK_CALL(motif_run(&ss2, 3, setup));
     char* fire[1] = { "P.MOTIF 4 0 0" };
@@ -1012,7 +1012,7 @@ TEST test_P_MOTIF_determinism() {
 TEST test_P_MOTIF_repetition() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 7" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 7" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 0 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1028,7 +1028,7 @@ TEST test_P_MOTIF_repetition() {
 TEST test_P_MOTIF_transposition() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 99" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 99" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 0 2" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1046,7 +1046,7 @@ TEST test_P_MOTIF_transposition() {
 TEST test_P_MOTIF_inversion() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 11" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 11" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 1 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1063,7 +1063,7 @@ TEST test_P_MOTIF_inversion() {
 TEST test_P_MOTIF_retrograde() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 13" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 13" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 2 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1078,7 +1078,7 @@ TEST test_P_MOTIF_retrograde() {
 TEST test_P_MOTIF_alternate() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 19" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 19" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 3 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1098,7 +1098,7 @@ TEST test_P_MOTIF_alternate() {
 TEST test_P_MOTIF_ornament() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 23" };
+    char* setup[3] = { "P.L 8", "P.START 0", "P.SEED 23" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 4 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1123,7 +1123,7 @@ TEST test_P_MOTIF_ornament() {
 TEST test_P_MOTIF_expand() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 29" };
+    char* setup[3] = { "P.L 8", "P.START 0", "P.SEED 29" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 6 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1140,7 +1140,7 @@ TEST test_P_MOTIF_expand() {
 TEST test_P_MOTIF_compress() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 7", "P.SEED 31" };
+    char* setup[3] = { "P.L 8", "P.START 0", "P.SEED 31" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 5 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1157,7 +1157,7 @@ TEST test_P_MOTIF_compress() {
 TEST test_P_MOTIF_rotate() {
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 37" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 37" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 7 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1179,7 +1179,7 @@ TEST test_P_MOTIF_partial_trailing() {
     // and pattern[9]==P[1].
     scene_state_t ss;
     ss_init(&ss);
-    char* setup[3] = { "P.START 0", "P.END 9", "P.SEED 5" };
+    char* setup[3] = { "P.L 10", "P.START 0", "P.SEED 5" };
     CHECK_CALL(motif_run(&ss, 3, setup));
     char* fire[1] = { "P.MOTIF 4 0 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
@@ -1194,7 +1194,7 @@ TEST test_P_MOTIF_length_clamping() {
     ss_init(&b);
     ss_init(&c);
     ss_init(&d);
-    char* setup[3] = { "P.START 0", "P.END 15", "P.SEED 17" };
+    char* setup[3] = { "P.L 16", "P.START 0", "P.SEED 17" };
     CHECK_CALL(motif_run(&a, 3, setup));
     CHECK_CALL(motif_run(&b, 3, setup));
     CHECK_CALL(motif_run(&c, 3, setup));
@@ -1214,29 +1214,43 @@ TEST test_P_MOTIF_length_clamping() {
     PASS();
 }
 
-TEST test_P_MOTIF_window_respect() {
+TEST test_P_MOTIF_beyond_length_untouched() {
     scene_state_t ss;
     ss_init(&ss);
-    // Seed pattern values outside the window with a sentinel.
-    char* prep[8] = { "P.START 0", "P.END 3", "P 4 999",  "P 5 999",
-                      "P 6 999",   "P 7 999", "P.SEED 1", "P.MOTIF 4 0 0" };
-    CHECK_CALL(motif_run(&ss, 8, prep));
+    // Cells at/after P.L must be left alone; sentinels at 4..7, length 4.
+    char* prep[7] = { "P.L 4",   "P 4 999",  "P 5 999",      "P 6 999",
+                      "P 7 999", "P.SEED 1", "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss, 7, prep));
     for (int i = 4; i <= 7; i++) {
         ASSERT_EQ(ss_get_pattern_val(&ss, 0, i), 999);
     }
     PASS();
 }
 
-TEST test_P_MOTIF_window_length_1() {
+// P.MOTIF fills cells 0..P.L-1, ignoring the START..END window.
+TEST test_P_MOTIF_ignores_window() {
     scene_state_t ss;
     ss_init(&ss);
-    char* prep[4] = { "P.START 0", "P.END 0", "P 1 777", "P.SEED 3" };
-    CHECK_CALL(motif_run(&ss, 4, prep));
+    // Narrow window [2,3] but length 6; cells 4,5 sit beyond END yet inside
+    // the length, so they must still be written (sentinel overwritten).
+    char* prep[7] = { "P.L 6",    "P.START 2", "P.END 3",      "P 4 -999",
+                      "P 5 -999", "P.SEED 1",  "P.MOTIF 4 0 0" };
+    CHECK_CALL(motif_run(&ss, 7, prep));
+    ASSERT(ss_get_pattern_val(&ss, 0, 4) != -999);
+    ASSERT(ss_get_pattern_val(&ss, 0, 5) != -999);
+    PASS();
+}
+
+TEST test_P_MOTIF_length_1() {
+    scene_state_t ss;
+    ss_init(&ss);
+    char* prep[3] = { "P.L 1", "P 1 777", "P.SEED 3" };
+    CHECK_CALL(motif_run(&ss, 3, prep));
     char* fire[1] = { "P.MOTIF 2 0 0" };
     CHECK_CALL(motif_run(&ss, 1, fire));
     // First note of motif is always degree 1 (untransposed reference).
     ASSERT_EQ(ss_get_pattern_val(&ss, 0, 0), 1);
-    // Outside the window is preserved.
+    // Beyond the length is preserved.
     ASSERT_EQ(ss_get_pattern_val(&ss, 0, 1), 777);
     PASS();
 }
@@ -1423,23 +1437,22 @@ TEST test_P_CP_window_wrap() {
     PASS();
 }
 
-TEST test_P_CP_window_length_one() {
+TEST test_P_CP_single_cell() {
+    // P.L == 1: the lone cell (index 0) + offset.
     scene_state_t ss;
     ss_init(&ss);
-    char* prep[3] = { "P.START 3", "P.END 3", "P 3 4" };
-    motif_run(&ss, 3, prep);
-    int16_t cp = cp_run(&ss, 3, 0, 5);
+    ss_set_pattern_val(&ss, 0, 0, 4);
+    ss_set_pattern_len(&ss, 0, 1);
+    int16_t cp = cp_run(&ss, 0, 0, 5);
     ASSERT_EQ(cp, 4 + 5);
     PASS();
 }
 
-TEST test_P_CP_inverted_window_applies_offset() {
-    // Regression: end<start path used to drop offset. Set start>end manually
-    // and confirm the fallback returns pattern[P.I] + offset.
+TEST test_P_CP_empty_pattern_applies_offset() {
+    // P.L == 0: fall back to pattern[P.I] + offset (and the offset is applied).
     scene_state_t ss;
     ss_init(&ss);
-    ss_set_pattern_start(&ss, 0, 5);
-    ss_set_pattern_end(&ss, 0, 2);
+    ss_set_pattern_len(&ss, 0, 0);
     ss_set_pattern_val(&ss, 0, 3, 42);
     ss_set_pattern_idx(&ss, 0, 3);
 
@@ -1828,13 +1841,11 @@ TEST test_P_FUGUE_transpose_clamps() {
     PASS();
 }
 
-TEST test_P_FUGUE_inverted_window() {
+TEST test_P_FUGUE_empty_pattern() {
     scene_state_t ss;
     ss_init(&ss);
-    // P.START 5 : P.END 2 -> end < start, subject_len < 1 -> return 0
-    ss_set_pattern_start(&ss, 0, 5);
-    ss_set_pattern_end(&ss, 0, 2);
-    ss_set_pattern_len(&ss, 0, 8);
+    // P.L == 0 -> no subject -> return 0, regardless of clock/args.
+    ss_set_pattern_len(&ss, 0, 0);
     for (int i = 0; i < 8; i++) ss_set_pattern_val(&ss, 0, i, (int16_t)(i + 1));
     ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, 0), 0);
     ASSERT_EQ(fugue_run(&ss, 0, 1, 7, 2, 3, 5), 0);
@@ -1859,24 +1870,25 @@ TEST test_P_FUGUE_truncation_plateau() {
     PASS();
 }
 
-TEST test_P_FUGUE_inversion_nonzero_start() {
+// P.FUGUE reads cells 0..P.L-1 as the subject, ignoring the START..END window.
+TEST test_P_FUGUE_ignores_window() {
     scene_state_t ss;
     ss_init(&ss);
-    // Window starts at index 2; the inversion axis must be subj[start],
-    // not subj[0]. If the impl used the literal 0 the test would fail.
+    // A narrow window [2,5] must NOT narrow the subject: the whole length is
+    // read, and the inversion axis is subj[0], not subj[START].
     ss_set_pattern_start(&ss, 0, 2);
     ss_set_pattern_end(&ss, 0, 5);
-    ss_set_pattern_len(&ss, 0, 8);
-    ss_set_pattern_val(&ss, 0, 0, 99);  // outside window, must be ignored
-    ss_set_pattern_val(&ss, 0, 1, 99);
-    ss_set_pattern_val(&ss, 0, 2, 3);   // subject begins here
-    ss_set_pattern_val(&ss, 0, 3, 5);
-    ss_set_pattern_val(&ss, 0, 4, 4);
-    ss_set_pattern_val(&ss, 0, 5, 7);
-    // Inversion around subj[start]=3 -> {3,1,2,-1}
-    int16_t expected[4] = { 3, 1, 2, -1 };
+    ss_set_pattern_len(&ss, 0, 4);
+    int16_t subj[4] = { 3, 5, 4, 7 };
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, (int16_t)i, subj[i]);
+    // PRIME reads cells 0..3 in order (START=2 is ignored).
     for (int t = 0; t < 4; t++) {
-        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 1, 0, t), expected[t]);
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 0, 0, t), subj[t]);
+    }
+    // INVERSION axis is subj[0]=3 -> {3,1,2,-1}.
+    int16_t inv[4] = { 3, 1, 2, -1 };
+    for (int t = 0; t < 4; t++) {
+        ASSERT_EQ(fugue_run(&ss, 0, 1, 0, 1, 0, t), inv[t]);
     }
     PASS();
 }
@@ -2388,8 +2400,9 @@ static void orn_setup(scene_state_t* ss, int bank, int start, int end,
                       const int16_t* vals) {
     ss_set_pattern_start(ss, bank, (int16_t)start);
     ss_set_pattern_end(ss, bank, (int16_t)end);
-    // P.ORN derives its window from start/end, not len; len is set only to
-    // keep the fixture a realistic, well-formed pattern.
+    // P.ORN reads cells 0..P.L-1, ignoring start/end. These fixtures all use
+    // start == 0, so the window coincides with the length; len is what the op
+    // actually consults.
     ss_set_pattern_len(ss, bank, (int16_t)(end + 1));
     for (int i = start; i <= end; i++) {
         ss_set_pattern_val(ss, bank, (int16_t)i, vals[i - start]);
@@ -2601,13 +2614,33 @@ TEST test_P_ORN_window_one() {
     PASS();
 }
 
-TEST test_P_ORN_empty_window() {
+TEST test_P_ORN_empty_pattern() {
     scene_state_t ss;
     ss_init(&ss);
-    ss_set_pattern_start(&ss, 0, 2);
-    ss_set_pattern_end(&ss, 0, 1);  // START > END
+    // P.L == 0 (the default): nothing to read -> 0, regardless of
+    // type/position.
+    ss_set_pattern_len(&ss, 0, 0);
     ASSERT_EQ(orn_run(&ss, 0, 0), 0);
     ASSERT_EQ(orn_run(&ss, 5, 3), 0);
+    PASS();
+}
+
+// P.ORN reads the whole pattern length, not the START..END window.
+TEST test_P_ORN_uses_length_not_window() {
+    scene_state_t ss;
+    ss_init(&ss);
+    int16_t vals[4] = { 3, 5, 4, 7 };
+    for (int i = 0; i < 4; i++) ss_set_pattern_val(&ss, 0, (int16_t)i, vals[i]);
+    ss_set_pattern_len(&ss, 0, 4);
+    // A narrow window that would hide cells 0 and 3 if it were honoured.
+    ss_set_pattern_start(&ss, 0, 1);
+    ss_set_pattern_end(&ss, 0, 2);
+    // Cells outside [start,end] are still read, and position wraps over len 4.
+    ASSERT_EQ(orn_run(&ss, 0, 0), 3);  // cell 0 (below START)
+    ASSERT_EQ(orn_run(&ss, 0, 3), 7);  // cell 3 (above END)
+    ASSERT_EQ(orn_run(&ss, 0, 4), 3);  // wraps over full length 4 -> cell 0
+    // ANTICIPATION at cell 3 wraps to cell 0 (length boundary, not END).
+    ASSERT_EQ(orn_run(&ss, 1, 3), 3);
     PASS();
 }
 
@@ -3450,8 +3483,9 @@ SUITE(process_suite) {
     RUN_TEST(test_P_MOTIF_rotate);
     RUN_TEST(test_P_MOTIF_partial_trailing);
     RUN_TEST(test_P_MOTIF_length_clamping);
-    RUN_TEST(test_P_MOTIF_window_respect);
-    RUN_TEST(test_P_MOTIF_window_length_1);
+    RUN_TEST(test_P_MOTIF_beyond_length_untouched);
+    RUN_TEST(test_P_MOTIF_ignores_window);
+    RUN_TEST(test_P_MOTIF_length_1);
     RUN_TEST(test_P_CP_determinism);
     RUN_TEST(test_P_CP_no_side_effects);
     RUN_TEST(test_P_CP_consonance);
@@ -3462,8 +3496,8 @@ SUITE(process_suite) {
     RUN_TEST(test_P_CP_oblique_clustering);
     RUN_TEST(test_P_CP_offset_shifts);
     RUN_TEST(test_P_CP_window_wrap);
-    RUN_TEST(test_P_CP_window_length_one);
-    RUN_TEST(test_P_CP_inverted_window_applies_offset);
+    RUN_TEST(test_P_CP_single_cell);
+    RUN_TEST(test_P_CP_empty_pattern_applies_offset);
     RUN_TEST(test_P_CP_oblique_negative_cf);
     RUN_TEST(test_PN_CP_explicit_bank);
     RUN_TEST(test_P_FUGUE_determinism);
@@ -3489,9 +3523,9 @@ SUITE(process_suite) {
     RUN_TEST(test_P_FUGUE_mode_clamp);
     RUN_TEST(test_P_FUGUE_int16_min_clock);
     RUN_TEST(test_P_FUGUE_transpose_clamps);
-    RUN_TEST(test_P_FUGUE_inverted_window);
+    RUN_TEST(test_P_FUGUE_empty_pattern);
     RUN_TEST(test_P_FUGUE_truncation_plateau);
-    RUN_TEST(test_P_FUGUE_inversion_nonzero_start);
+    RUN_TEST(test_P_FUGUE_ignores_window);
     RUN_TEST(test_PN_FUGUE_modes_and_phase);
     RUN_TEST(test_PN_FUGUE_pn_normalises);
     RUN_TEST(test_PN_FUGUE_explicit_bank);
@@ -3538,7 +3572,8 @@ SUITE(process_suite) {
     RUN_TEST(test_P_ORN_position_wraps);
     RUN_TEST(test_P_ORN_type_clamp);
     RUN_TEST(test_P_ORN_window_one);
-    RUN_TEST(test_P_ORN_empty_window);
+    RUN_TEST(test_P_ORN_empty_pattern);
+    RUN_TEST(test_P_ORN_uses_length_not_window);
     RUN_TEST(test_P_ORN_symmetry);
     RUN_TEST(test_PN_ORN_explicit_bank);
     RUN_TEST(test_P_ORN_half_turn_line);

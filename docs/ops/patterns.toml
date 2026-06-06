@@ -323,11 +323,11 @@ prototype = "PN.MAP x: ..."
 short = "apply the 'function' to each value in pattern `x`, `I` takes each pattern value"
 
 ["P.MOTIF"]
-prototype = "P.MOTIF length variation transposition"
-short = "fill the working pattern with a generated diatonic motif and variations"
-description = """Generate a short melodic motif and write it, repeated with variations, across the working pattern's `START..END` window. Output values are diatonic scale degrees (`1-7` = one octave), intended to be quantised downstream with `N.S` or `QT.S`.
+prototype = "P.MOTIF l v t"
+short = "fill the working pattern with a generated diatonic motif of length `l`, applying variation `v` and per-repeat transposition `t`"
+description = """Generate a short melodic motif and write it, repeated with variations, across the whole working pattern (cells `0` to `P.L-1`; `START`/`END` are ignored). Output values are diatonic scale degrees (`1-7` = one octave), intended to be quantised downstream with `N.S` or `QT.S`.
 
-`length` is the motif length in cells, clamped to `2-4`. `variation` (wrapped to `0-7`) selects the transformation applied to each statement after the first:
+`l` is the motif length in cells, clamped to `2-4`. `v` (variation, wrapped to `0-7`) selects the transformation applied to each statement after the first:
 
 - `0` EXACT — repeat unchanged
 - `1` INVERT — mirror intervals
@@ -338,19 +338,19 @@ description = """Generate a short melodic motif and write it, repeated with vari
 - `6` EXPAND — double intervals
 - `7` ROTATE — rotate the motif
 
-`transposition` is a signed scale-degree shift added per successive statement. The motif is drawn from the pattern random generator (see `P.SEED`), so the same seed reproduces the same motif. Does not return a value."""
+`t` (transposition) is a signed scale-degree shift added per successive statement. The motif is drawn from the pattern random generator (see `P.SEED`), so the same seed reproduces the same motif. Does not return a value."""
 
 ["PN.MOTIF"]
-prototype = "PN.MOTIF x length variation transposition"
+prototype = "PN.MOTIF x l v t"
 short = "fill pattern `x` with a generated diatonic motif and variations"
 description = "As `P.MOTIF`, but operates on pattern `x` rather than the working pattern."
 
 ["P.CP"]
-prototype = "P.CP rule offset"
-short = "return a diatonic counterpoint degree against the value at the current index"
-description = """Read a counterpoint voice against the working pattern's value at the current index (`P.I`), using the whole `START..END` window for melodic context. Input and output are diatonic scale degrees, to pair with `P.MOTIF` and `N.S` / `QT.S`. Stateless: does not advance the playhead or modify the pattern.
+prototype = "P.CP r o"
+short = "return a diatonic counterpoint degree (style `r`, shifted by `o`) against the value at the current index"
+description = """Read a counterpoint voice against the working pattern's value at the current index (`P.I`), using the whole pattern (cells `0` to `P.L-1`; `START`/`END` are ignored) for melodic context. Input and output are diatonic scale degrees, to pair with `P.MOTIF` and `N.S` / `QT.S`. Stateless: does not advance the playhead or modify the pattern.
 
-`rule` (wrapped to `0-7`) selects the counterpoint style:
+`r` (rule, wrapped to `0-7`) selects the counterpoint style:
 
 - `0` BALANCED
 - `1` CONTRARY — move opposite to the melody
@@ -358,43 +358,43 @@ description = """Read a counterpoint voice against the working pattern's value a
 - `3` BASS — stay below, prefer 5ths and octaves
 - `4` MIRROR — invert around an axis
 - `5` OBLIQUE — pull toward the tonic octave
-- `6` CANON — echo an earlier point in the window
+- `6` CANON — echo an earlier point in the pattern
 - `7` FOLLOW — move in the same direction as the melody
 
-`offset` is a signed scale-degree shift added to the result."""
+`o` (offset) is a signed scale-degree shift added to the result."""
 
 ["PN.CP"]
-prototype = "PN.CP x rule offset"
+prototype = "PN.CP x r o"
 short = "return a diatonic counterpoint degree against the current value of pattern `x`"
 description = "As `P.CP`, but reads pattern `x` rather than the working pattern."
 
 ["P.FUGUE"]
-prototype = "P.FUGUE voice division transpose mode phase clock"
-short = "read the working pattern as a fugal voice; return one scale degree for the given clock"
-description = """Read the working pattern's `START..END` window as a fugal subject and return one diatonic scale degree determined purely by `clock` (the caller supplies and increments it, usually `T`). Stateless with respect to the pattern: never writes the pattern or advances `P.I`. Multiple calls with different args produce a multi-voice fugal texture.
+prototype = "P.FUGUE v d t m p c"
+short = "read the working pattern as fugal voice `v`, returning its scale degree at clock `c`: `d` ticks per note, transpose `t`, subject mode `m`, phase `p`"
+description = """Read the whole working pattern (cells `0` to `P.L-1`; `START`/`END` are ignored) as a fugal subject and return one diatonic scale degree determined purely by `c` (the clock; the caller supplies and increments it, usually `T`). Stateless with respect to the pattern: never writes the pattern or advances `P.I`. Multiple calls with different args produce a multi-voice fugal texture.
 
-- `division` — ticks per note; negative reverses direction. `0` returns `0`.
-- `transpose` — signed scale-degree offset added to the result.
-- `mode` — subject transformation (out of range coerces to PRIME): `0` PRIME, `1` INVERSION (mirror around the subject's first note), `2` RETROGRADE, `3` RETROGRADE-INVERSION.
-- `phase` — position offset within the subject; enables stretto. Wraps modulo subject length.
-- `clock` — master time reference; any signed value.
+- `d` (division) — ticks per note; negative reverses direction. `0` returns `0`.
+- `t` (transpose) — signed scale-degree offset added to the result.
+- `m` (mode) — subject transformation (out of range coerces to PRIME): `0` PRIME, `1` INVERSION (mirror around the subject's first note), `2` RETROGRADE, `3` RETROGRADE-INVERSION.
+- `p` (phase) — position offset within the subject; enables stretto. Wraps modulo subject length.
+- `c` (clock) — master time reference; any signed value.
 
-`voice` (clamped `0-4`) enables optional inter-voice clash avoidance:
+`v` (voice, clamped `0-4`) enables optional inter-voice clash avoidance:
 
 - `0` — stateless; behaves purely as above.
-- `1-4` — record this voice's result in a per-bank table and, for voices `2-4`, nudge the result by a scale degree to avoid 2nds and 7ths against lower-numbered voices recorded at the same `clock`. Adjustment is bidirectional, and the result is octave-clamped to within two octaves of the lowest tracked voice. Call voices in ascending numerical order within a tick for reliable avoidance."""
+- `1-4` — record this voice's result in a per-bank table and, for voices `2-4`, nudge the result by a scale degree to avoid 2nds and 7ths against lower-numbered voices recorded at the same `c`. Adjustment is bidirectional, and the result is octave-clamped to within two octaves of the lowest tracked voice. Call voices in ascending numerical order within a tick for reliable avoidance."""
 
 ["PN.FUGUE"]
-prototype = "PN.FUGUE x voice division transpose mode phase clock"
+prototype = "PN.FUGUE x v d t m p c"
 short = "read pattern `x` as a fugal voice; return one scale degree for the given clock"
 description = "As `P.FUGUE`, but reads pattern `x`, and the voice-avoidance state table is keyed per bank so independent fugues on different patterns do not interfere."
 
 ["P.ORN"]
-prototype = "P.ORN type position"
-short = "return an ornamented diatonic degree drawn from the working pattern's `START..END` window at `position`, transformed by ornament `type`"
-description = """Stateless, read-only ornament reader. Reads the working pattern's value at `position` (a focal note) and returns it transformed by ornament `type`, using the focal note's immediate neighbours in the `START..END` window for context. Input and output are diatonic scale degrees (`1-7` = one octave), to pair with `P.MOTIF` / `P.CP` and quantise downstream with `N.S` / `QT.S`. Never writes the pattern, advances `P.I`, uses randomness or timing — the same pattern and args always yield the same value.
+prototype = "P.ORN t p"
+short = "return an ornamented diatonic degree drawn from the working pattern (indices `0` to `P.L-1`) at position `p`, transformed by ornament `t`"
+description = """Stateless, read-only ornament reader. Reads the working pattern's value at position `p` (a focal note) and returns it transformed by ornament `t`, using the focal note's immediate neighbours for context. Reads cells `0` to `P.L-1`; `START`/`END` are ignored. Input and output are diatonic scale degrees (`1-7` = one octave), to pair with `P.MOTIF` / `P.CP` and quantise downstream with `N.S` / `QT.S`. Never writes the pattern, advances `P.I`, uses randomness or timing — the same pattern and args always yield the same value.
 
-`position` wraps modulo the window length; neighbours wrap at the window edges. `type` selects the ornament (out of range collapses to `0` NONE):
+`p` wraps modulo the pattern length; neighbours wrap at the length boundary. `t` selects the ornament (out of range collapses to `0` NONE):
 
 - `0` NONE — focal note unchanged
 - `1` ANTICIPATION — the next note (played early)
@@ -408,10 +408,10 @@ description = """Stateless, read-only ornament reader. Reads the working pattern
 - `9` HALF_TURN_T — one degree past the next note, in the line's direction
 - `10` HALF_TURN_A — one degree from the focal note, opposite the line
 
-The result is clamped to the int16 range. An empty window (`START > END`) returns `0`. Pairs well with an ornament-type table held in another pattern bank, read via `PN.ORN`."""
+The result is clamped to the int16 range. An empty pattern (`P.L` of `0`) returns `0`. Pairs well with an ornament-type table held in another pattern bank, read via `PN.ORN`."""
 
 ["PN.ORN"]
-prototype = "PN.ORN x type position"
+prototype = "PN.ORN x t p"
 short = "as `P.ORN`, but reads pattern `x`"
 description = "As `P.ORN`, but reads pattern `x` rather than the working pattern."
 
@@ -506,14 +506,14 @@ short = "get/set the dwell duration of the current cell of pattern `x`"
 description = "As `P.D.HERE`, but for pattern `x`."
 
 ["P.D.RND"]
-prototype = "P.D.RND lo hi"
-short = "randomise every cell duration in the working pattern to between `lo` and `hi`"
-description = "Randomise the dwell duration of every cell in the pattern (indices `0` to `P.L - 1`) to a value between `lo` and `hi` (inclusive). `START`/`END` are ignored. Bounds are clamped to at least `1` and swapped if `lo > hi`. No return value."
+prototype = "P.D.RND x y"
+short = "randomise every cell duration in the working pattern to between `x` and `y`"
+description = "Randomise the dwell duration of every cell in the pattern (indices `0` to `P.L - 1`) to a value between `x` and `y` (inclusive). `START`/`END` are ignored. Bounds are clamped to at least `1` and swapped if `x > y`. No return value."
 
 ["PN.D.RND"]
-prototype = "PN.D.RND x lo hi"
-short = "randomise every cell duration in pattern `x` to between `lo` and `hi`"
-description = "As `P.D.RND`, but for pattern `x`."
+prototype = "PN.D.RND x y z"
+short = "randomise every cell duration in pattern `x` to between `y` and `z`"
+description = "As `P.D.RND`, but for pattern `x` (range `y` to `z`)."
 
 ["P.D.RND.M"]
 prototype = "P.D.RND.M n"

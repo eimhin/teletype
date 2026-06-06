@@ -963,16 +963,18 @@ static int16_t motif_step(random_state_t *r, int16_t prev_step) {
     return sign * mag;
 }
 
-// Fill the working pattern's [start..end] window with a motif and its
-// variations. Output values are diatonic scale degrees (1..7 = one octave, 0
-// and negatives below). length: 2-4 (clamped). variation: 0-7 (wrapped).
-// transposition: signed degree shift applied to each successive statement.
+// Fill the working pattern (cells 0..P.L-1, ignoring START/END) with a motif
+// and its variations. Output values are diatonic scale degrees (1..7 = one
+// octave, 0 and negatives below). length: 2-4 (clamped). variation: 0-7
+// (wrapped). transposition: signed degree shift applied to each successive
+// statement.
 static void p_motif(scene_state_t *ss, int16_t pn, int16_t length,
                     int16_t variation, int16_t transposition) {
     pn = normalise_pn(pn);
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
-    if (end < start) return;
+    int16_t len = ss_get_pattern_len(ss, pn);
+    if (len < 1) return;
+    int16_t start = 0;
+    int16_t end = len - 1;
 
     if (length < 2) length = 2;
     if (length > 4) length = 4;
@@ -1076,9 +1078,9 @@ const tele_op_t op_PN_MOTIF = MAKE_GET_OP(PN.MOTIF, op_PN_MOTIF_get, 4, false);
 // P.CP / PN.CP — diatonic two-voice counterpoint reader //////////////////////
 //
 // Stateless read-only op: returns a diatonic degree forming counterpoint
-// against pattern[P.I] using the full START..END window for context.
-// Input and output are diatonic scale degrees (1..7 = one octave), to pair
-// with P.MOTIF and N.S / QT.S.
+// against pattern[P.I] using the whole pattern (cells 0..P.L-1, ignoring
+// START/END) for context. Input and output are diatonic scale degrees
+// (1..7 = one octave), to pair with P.MOTIF and N.S / QT.S.
 
 typedef struct {
     int16_t vmin, vmax;
@@ -1125,15 +1127,17 @@ static void cp_analyse_window(scene_state_t *ss, int16_t pn, int16_t start,
 static int16_t cp_compute(scene_state_t *ss, int16_t pn, int16_t rule,
                           int16_t offset) {
     pn = normalise_pn(pn);
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
+    // Read the whole pattern (cells 0..P.L-1); START/END are ignored.
+    int16_t len = ss_get_pattern_len(ss, pn);
+    int16_t start = 0;
+    int16_t end = len - 1;
     int16_t cur_idx = ss_get_pattern_idx(ss, pn);
 
-    if (end < start) {
+    if (end < start) {  // empty pattern (P.L == 0)
         return cp_clamp_i16((int32_t)ss_get_pattern_val(ss, pn, cur_idx) +
                             offset);
     }
-    if (end == start) {
+    if (end == start) {  // single cell (P.L == 1)
         return cp_clamp_i16((int32_t)ss_get_pattern_val(ss, pn, start) +
                             offset);
     }
@@ -1267,10 +1271,11 @@ const tele_op_t op_P_CP = MAKE_GET_OP(P.CP, op_P_CP_get, 2, true);
 const tele_op_t op_PN_CP = MAKE_GET_OP(PN.CP, op_PN_CP_get, 3, true);
 
 ////////////////////////////////////////////////////////////////////////////////
-// P.FUGUE / PN.FUGUE — fugal voice reader //////////////////////////////////////
+// P.FUGUE / PN.FUGUE — fugal voice reader ////////////////////////////////
 //
-// Reads the pattern window [start..end] as a fugal subject. Returns one
-// diatonic scale degree based on a caller-supplied master clock.
+// Reads the whole pattern (cells 0..P.L-1, ignoring START/END) as a fugal
+// subject. Returns one diatonic scale degree based on a caller-supplied master
+// clock.
 //
 // Mode is coerced to PRIME for values outside 0..3 (so mode=4 is *not*
 // "RETROGRADE-INVERSION+1"). Note that clock advances via C truncation-
@@ -1321,9 +1326,9 @@ void fugue_voice_state_reset(void) {
 static int16_t fugue_candidate(scene_state_t *ss, int16_t pn, int16_t division,
                                int16_t transpose, int16_t mode, int16_t phase,
                                int16_t clock) {
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
-    int subject_len = (int)end - (int)start + 1;
+    // Subject spans the whole pattern (cells 0..P.L-1); START/END are ignored.
+    int16_t start = 0;
+    int subject_len = (int)ss_get_pattern_len(ss, pn);
 
     if (mode < 0 || mode > 3) mode = 0;
 
@@ -1349,9 +1354,7 @@ static int16_t fugue_read(scene_state_t *ss, int16_t pn, int16_t voice,
                           int16_t phase, int16_t clock) {
     pn = normalise_pn(pn);
 
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
-    if (((int)end - (int)start + 1) < 1 || division == 0) return 0;
+    if (ss_get_pattern_len(ss, pn) < 1 || division == 0) return 0;
 
     int16_t candidate =
         fugue_candidate(ss, pn, division, transpose, mode, phase, clock);
@@ -1445,8 +1448,9 @@ const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 7, true);
 // P.ORN PN.ORN ////////////////////////////////////////////////////////////////
 //
 // Stateless, read-only diatonic ornament reader. Given a focal position in the
-// pattern's START..END window and an ornament type (0..10), returns a single
-// value derived from the focal note and its immediate neighbours. Values are
+// pattern (indices 0..P.L-1, ignoring START/END) and an ornament type (0..10),
+// returns a single value derived from the focal note and its immediate
+// neighbours. Values are
 // scale degrees (1..7 = one octave), so the arithmetic below is in diatonic
 // steps, not semitones. No writes, no playhead advance, no state, no
 // randomness: same pattern + same args always yields the same value.
@@ -1463,18 +1467,15 @@ const tele_op_t op_PN_FUGUE = MAKE_GET_OP(PN.FUGUE, op_PN_FUGUE_get, 7, true);
 static int16_t orn_read(scene_state_t *ss, int16_t pn, int16_t type,
                         int16_t position) {
     pn = normalise_pn(pn);
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
-    int len = (int)end - (int)start + 1;
+    int len = ss_get_pattern_len(ss, pn);
 
-    if (len < 1) return 0;                // empty window (START > END)
+    if (len < 1) return 0;                // empty pattern (P.L == 0)
     if (type < 0 || type > 10) type = 0;  // unknown type -> NONE
 
-    // safe-modulo wrap of position into [start, end]
-    int rel = (((int)position - start) % len + len) % len;
-    int idx = start + rel;
-    int next_idx = (idx == end) ? start : idx + 1;  // neighbours wrap
-    int prev_idx = (idx == start) ? end : idx - 1;
+    // safe-modulo wrap of position into [0, len-1]
+    int idx = ((int)position % len + len) % len;
+    int next_idx = (idx == len - 1) ? 0 : idx + 1;  // neighbours wrap
+    int prev_idx = (idx == 0) ? len - 1 : idx - 1;
 
     int current = ss_get_pattern_val(ss, pn, idx);
     int next_note = ss_get_pattern_val(ss, pn, next_idx);
