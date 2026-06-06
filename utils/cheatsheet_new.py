@@ -52,7 +52,8 @@ FEATURE_GROUPS = [
     ("Stages", [
         "P.STEP", "PN.STEP", "P.STEP.NEW", "PN.STEP.NEW",
         "P.STEP?", "PN.STEP?",
-        "P.D", "PN.D", "P.D.HERE", "PN.D.HERE", "P.D.RND", "PN.D.RND"]),
+        "P.D", "PN.D", "P.D.HERE", "PN.D.HERE", "P.D.RND", "PN.D.RND",
+        "P.D.RND.M", "PN.D.RND.M", "P.D.RND.N", "PN.D.RND.N"]),
     ("Custom pattern", [
         "XP", "XP.HERE", "XP.I", "XP.L", "XP.WRAP", "XP.START", "XP.END",
         "XP.NEXT", "XP.NEXT.ALL"]),

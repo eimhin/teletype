@@ -1722,13 +1722,14 @@ static void op_PN_D_HERE_set(const void *NOTUSED(data), scene_state_t *ss,
     tele_pattern_updated();
 }
 
-// Randomise dur[] for every cell in [start..end]. lo/hi are clamped >= 1
-// and swapped if lo > hi, so a freeze-the-sequencer 0 is impossible.
+// Randomise dur[] for every cell in the pattern (indices 0..len-1). lo/hi are
+// clamped >= 1 and swapped if lo > hi, so a freeze-the-sequencer 0 is
+// impossible. START/END markers are ignored; cells beyond the length are left
+// alone since they never play.
 static void p_d_rnd(scene_state_t *ss, int16_t pn, int16_t lo, int16_t hi) {
     pn = normalise_pn(pn);
-    int16_t start = ss_get_pattern_start(ss, pn);
-    int16_t end = ss_get_pattern_end(ss, pn);
-    if (end < start) return;
+    int16_t len = ss_get_pattern_len(ss, pn);
+    if (len < 1) return;
 
     if (lo < 1) lo = 1;
     if (hi < 1) hi = 1;
@@ -1740,11 +1741,47 @@ static void p_d_rnd(scene_state_t *ss, int16_t pn, int16_t lo, int16_t hi) {
 
     random_state_t *r = &ss->rand_states.s.pattern.rand;
     int16_t range = hi - lo + 1;
-    for (int16_t i = start; i <= end; i++) {
+    for (int16_t i = 0; i < len; i++) {
         int16_t v = (int16_t)(random_next(r) % range) + lo;
         ss_set_pattern_dur(ss, pn, i, v);
     }
     tele_pattern_updated();
+}
+
+// Randomise dur[] for cells 0..len-1 so they sum to exactly `target`. Every
+// cell gets at least 1; the surplus is scattered one tick at a time across
+// random cells (len <= 64, so the loop is cheap). No-op if `target` can't give
+// every cell >= 1. `pn` must already be normalised.
+static void p_d_rnd_sum(scene_state_t *ss, int16_t pn, int32_t target) {
+    int16_t len = ss_get_pattern_len(ss, pn);
+    if (len < 1 || target < len) return;
+
+    random_state_t *r = &ss->rand_states.s.pattern.rand;
+    for (int16_t i = 0; i < len; i++) ss_set_pattern_dur(ss, pn, i, 1);
+    for (int32_t surplus = target - len; surplus > 0; surplus--) {
+        int16_t i = (int16_t)(random_next(r) % len);
+        ss_set_pattern_dur(ss, pn, i, ss_get_pattern_dur(ss, pn, i) + 1);
+    }
+    tele_pattern_updated();
+}
+
+// Randomise durations so the whole pattern cycle sums to the smallest multiple
+// of n that is >= len (so each cell can be >= 1) -- equals n when len <= n.
+static void p_d_rnd_m(scene_state_t *ss, int16_t pn, int16_t n) {
+    pn = normalise_pn(pn);
+    int16_t len = ss_get_pattern_len(ss, pn);
+    if (len < 1) return;
+    if (n < 1) n = 1;
+    int32_t target = (((int32_t)len + n - 1) / n) * n;
+    p_d_rnd_sum(ss, pn, target);
+}
+
+// Randomise durations so the whole pattern cycle sums to exactly n. No-op when
+// n < len (can't give every cell >= 1 without overshooting n).
+static void p_d_rnd_n(scene_state_t *ss, int16_t pn, int16_t n) {
+    pn = normalise_pn(pn);
+    if (n < 1) n = 1;
+    p_d_rnd_sum(ss, pn, n);
 }
 
 static void op_P_D_RND_get(const void *NOTUSED(data), scene_state_t *ss,
@@ -1762,6 +1799,32 @@ static void op_PN_D_RND_get(const void *NOTUSED(data), scene_state_t *ss,
     p_d_rnd(ss, pn, lo, hi);
 }
 
+static void op_P_D_RND_M_get(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t n = cs_pop(cs);
+    p_d_rnd_m(ss, ss->variables.p_n, n);
+}
+
+static void op_PN_D_RND_M_get(const void *NOTUSED(data), scene_state_t *ss,
+                              exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    p_d_rnd_m(ss, pn, n);
+}
+
+static void op_P_D_RND_N_get(const void *NOTUSED(data), scene_state_t *ss,
+                             exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t n = cs_pop(cs);
+    p_d_rnd_n(ss, ss->variables.p_n, n);
+}
+
+static void op_PN_D_RND_N_get(const void *NOTUSED(data), scene_state_t *ss,
+                              exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t pn = cs_pop(cs);
+    int16_t n = cs_pop(cs);
+    p_d_rnd_n(ss, pn, n);
+}
+
 // clang-format off
 const tele_op_t op_P_D        = MAKE_GET_SET_OP(P.D,        op_P_D_get,        op_P_D_set,        1, true);
 const tele_op_t op_PN_D       = MAKE_GET_SET_OP(PN.D,       op_PN_D_get,       op_PN_D_set,       2, true);
@@ -1769,6 +1832,10 @@ const tele_op_t op_P_D_HERE   = MAKE_GET_SET_OP(P.D.HERE,   op_P_D_HERE_get,   o
 const tele_op_t op_PN_D_HERE  = MAKE_GET_SET_OP(PN.D.HERE,  op_PN_D_HERE_get,  op_PN_D_HERE_set,  1, true);
 const tele_op_t op_P_D_RND    = MAKE_GET_OP(P.D.RND,        op_P_D_RND_get,    2, false);
 const tele_op_t op_PN_D_RND   = MAKE_GET_OP(PN.D.RND,       op_PN_D_RND_get,   3, false);
+const tele_op_t op_P_D_RND_M  = MAKE_GET_OP(P.D.RND.M,      op_P_D_RND_M_get,  1, false);
+const tele_op_t op_PN_D_RND_M = MAKE_GET_OP(PN.D.RND.M,     op_PN_D_RND_M_get, 2, false);
+const tele_op_t op_P_D_RND_N  = MAKE_GET_OP(P.D.RND.N,      op_P_D_RND_N_get,  1, false);
+const tele_op_t op_PN_D_RND_N = MAKE_GET_OP(PN.D.RND.N,     op_PN_D_RND_N_get, 2, false);
 // clang-format on
 
 

@@ -548,48 +548,103 @@ TEST test_P_D_RND() {
     scene_state_t ss;
     ss_init(&ss);
 
-    // Constrain randomisation to indices 2..5 on the active pattern.
-    // process_helper_state needs the trailing command to push a known
-    // value, so each sequence reads back something deterministic.
-    char* set_start[2] = { "P.START 2", "P.START" };
-    CHECK_CALL(process_helper_state(&ss, 2, set_start, 2));
-    char* set_end[2] = { "P.END 5", "P.END" };
-    CHECK_CALL(process_helper_state(&ss, 2, set_end, 5));
+    // P.D.RND randomises cells 0..len-1, ignoring START/END. Default len is 0,
+    // so give the working pattern a length of 6.
+    char* set_len[2] = { "P.L 6", "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len, 6));
 
-    // lo == hi makes the fill deterministic. Run RND then read cells.
-    char* rnd_3[2] = { "P.D.RND 3 3", "P.D 2" };
+    // lo == hi makes the fill deterministic. Every cell 0..5 becomes 3.
+    char* rnd_3[2] = { "P.D.RND 3 3", "P.D 0" };
     CHECK_CALL(process_helper_state(&ss, 2, rnd_3, 3));
     char* read_hi[1] = { "P.D 5" };
     CHECK_CALL(process_helper_state(&ss, 1, read_hi, 3));
 
-    // Cells outside [start..end] are untouched (still default 1).
-    char* read_below[1] = { "P.D 0" };
-    CHECK_CALL(process_helper_state(&ss, 1, read_below, 1));
+    // Cells at or beyond the pattern length are untouched (still default 1).
     char* read_above[1] = { "P.D 6" };
     CHECK_CALL(process_helper_state(&ss, 1, read_above, 1));
 
     // lo > hi: args swap internally. lo=10 hi=9 -> range [9, 10]; assert
-    // every written cell falls in that range (RNG-dependent exact value).
+    // every cell 0..5 falls in that range (RNG-dependent exact value).
     char* swap_then_dummy[2] = { "P.D.RND 10 9", "0" };
     CHECK_CALL(process_helper_state(&ss, 2, swap_then_dummy, 0));
-    for (int i = 2; i <= 5; i++) {
+    for (int i = 0; i < 6; i++) {
         int16_t v = ss_get_pattern_dur(&ss, 0, i);
         ASSERT(v == 9 || v == 10);
     }
+    // Cell beyond the length is still the default 1.
+    ASSERT(ss_get_pattern_dur(&ss, 0, 6) == 1);
 
     // lo < 1 clamps to 1: P.D.RND 0 0 -> fill with 1.
     char* clamp[2] = { "P.D.RND 0 0", "P.D 4" };
     CHECK_CALL(process_helper_state(&ss, 2, clamp, 1));
 
-    // Range randomisation on a different pattern. Pattern 1 keeps its
-    // default start=0 end=63 so every cell should be touched and fall
-    // in [2, 6].
+    // Range randomisation on a different pattern (length 64): every cell
+    // should be touched and fall in [2, 6].
+    char* set_len1[2] = { "PN.L 1 64", "PN.L 1" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len1, 64));
     char* mass_rnd[2] = { "PN.D.RND 1 2 6", "0" };
     CHECK_CALL(process_helper_state(&ss, 2, mass_rnd, 0));
     for (int i = 0; i < PATTERN_LENGTH; i++) {
         int16_t v = ss_get_pattern_dur(&ss, 1, i);
         ASSERT(v >= 2 && v <= 6);
     }
+    PASS();
+}
+
+// Sum of dur[] over cells 0..len-1 of pattern pn.
+static int32_t pattern_dur_sum(scene_state_t* ss, int16_t pn, int16_t len) {
+    int32_t sum = 0;
+    for (int16_t i = 0; i < len; i++) sum += ss_get_pattern_dur(ss, pn, i);
+    return sum;
+}
+
+TEST test_P_D_RND_SUM() {
+    scene_state_t ss;
+    ss_init(&ss);
+
+    // P.D.RND.M: len 4, target 32 -> 4 cells, each >= 1, summing to exactly 32
+    // (32 is already a multiple of 32 and >= len).
+    char* set_len[2] = { "P.L 4", "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len, 4));
+    char* rnd_m[2] = { "P.D.RND.M 32", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, rnd_m, 0));
+    ASSERT_EQ(32, pattern_dur_sum(&ss, 0, 4));
+    for (int i = 0; i < 4; i++) ASSERT(ss_get_pattern_dur(&ss, 0, i) >= 1);
+
+    // P.D.RND.M when len > n rounds up to the next multiple: len 40, n 32
+    // -> 64.
+    char* set_len40[2] = { "P.L 40", "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len40, 40));
+    char* rnd_m2[2] = { "P.D.RND.M 32", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, rnd_m2, 0));
+    ASSERT_EQ(64, pattern_dur_sum(&ss, 0, 40));
+    for (int i = 0; i < 40; i++) ASSERT(ss_get_pattern_dur(&ss, 0, i) >= 1);
+
+    // P.D.RND.N: len 4, target 10 -> sums to exactly 10, each cell >= 1.
+    char* set_len4[2] = { "P.L 4", "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len4, 4));
+    char* rnd_n[2] = { "P.D.RND.N 10", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, rnd_n, 0));
+    ASSERT_EQ(10, pattern_dur_sum(&ss, 0, 4));
+    for (int i = 0; i < 4; i++) ASSERT(ss_get_pattern_dur(&ss, 0, i) >= 1);
+
+    // P.D.RND.N infeasible (n < len): leaves durations unchanged.
+    char* set_len8[2] = { "P.L 8", "P.L" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len8, 8));
+    for (int i = 0; i < 8; i++) ss_set_pattern_dur(&ss, 0, i, 7);
+    char* rnd_n_bad[2] = { "P.D.RND.N 4", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, rnd_n_bad, 0));
+    for (int i = 0; i < 8; i++) ASSERT_EQ(7, ss_get_pattern_dur(&ss, 0, i));
+
+    // PN variants exercise the x arg on a second pattern.
+    char* set_len1[2] = { "PN.L 1 5", "PN.L 1" };
+    CHECK_CALL(process_helper_state(&ss, 2, set_len1, 5));
+    char* pn_rnd_m[2] = { "PN.D.RND.M 1 16", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, pn_rnd_m, 0));
+    ASSERT_EQ(16, pattern_dur_sum(&ss, 1, 5));  // len 5 <= 16 -> target 16
+    char* pn_rnd_n[2] = { "PN.D.RND.N 1 20", "0" };
+    CHECK_CALL(process_helper_state(&ss, 2, pn_rnd_n, 0));
+    ASSERT_EQ(20, pattern_dur_sum(&ss, 1, 5));
     PASS();
 }
 
@@ -3370,6 +3425,7 @@ SUITE(process_suite) {
     RUN_TEST(test_P_D_HERE);
     RUN_TEST(test_PN_D_family);
     RUN_TEST(test_P_D_RND);
+    RUN_TEST(test_P_D_RND_SUM);
     RUN_TEST(test_P_STEP_basic);
     RUN_TEST(test_P_STEP_dwells);
     RUN_TEST(test_P_I_resets_dwell);

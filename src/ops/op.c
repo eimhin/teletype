@@ -76,11 +76,12 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
     &op_P_RND, &op_PN_RND, &op_P_ADD, &op_PN_ADD, &op_P_SUB, &op_PN_SUB,
     &op_P_ADDW, &op_PN_ADDW, &op_P_SUBW, &op_PN_SUBW, &op_P_ACC, &op_PN_ACC,
     &op_P_ACC_W, &op_PN_ACC_W, &op_ACC_CLR, &op_P_D, &op_PN_D, &op_P_D_HERE,
-    &op_PN_D_HERE, &op_P_D_RND, &op_PN_D_RND, &op_P_STEP, &op_PN_STEP,
-    &op_P_STEP_NEW, &op_PN_STEP_NEW, &op_P_STEPQ, &op_PN_STEPQ, &op_P_MODE,
-    &op_PN_MODE, &op_P_DIR, &op_PN_DIR, &op_P_STRIDE, &op_PN_STRIDE,
-    &op_P_MOTIF, &op_PN_MOTIF, &op_P_CP, &op_PN_CP, &op_P_FUGUE, &op_PN_FUGUE,
-    &op_P_ORN, &op_PN_ORN,
+    &op_PN_D_HERE, &op_P_D_RND, &op_PN_D_RND, &op_P_D_RND_M, &op_PN_D_RND_M,
+    &op_P_D_RND_N, &op_PN_D_RND_N, &op_P_STEP, &op_PN_STEP, &op_P_STEP_NEW,
+    &op_PN_STEP_NEW, &op_P_STEPQ, &op_PN_STEPQ, &op_P_MODE, &op_PN_MODE,
+    &op_P_DIR, &op_PN_DIR, &op_P_STRIDE, &op_PN_STRIDE, &op_P_MOTIF,
+    &op_PN_MOTIF, &op_P_CP, &op_PN_CP, &op_P_FUGUE, &op_PN_FUGUE, &op_P_ORN,
+    &op_PN_ORN,
 
     // queue
     &op_Q, &op_Q_AVG, &op_Q_N, &op_Q_CLR, &op_Q_GRW, &op_Q_SUM, &op_Q_MIN,

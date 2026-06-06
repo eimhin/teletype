@@ -507,10 +507,30 @@ description = "As `P.D.HERE`, but for pattern `x`."
 
 ["P.D.RND"]
 prototype = "P.D.RND lo hi"
-short = "randomise every cell duration in the working pattern's window to between `lo` and `hi`"
-description = "Set each cell's dwell duration in the `START..END` window to a random value between `lo` and `hi` (inclusive). Both bounds are clamped to at least `1` and swapped if `lo > hi`, so a freeze-the-sequencer `0` is impossible. Does not return a value."
+short = "randomise every cell duration in the working pattern to between `lo` and `hi`"
+description = "Randomise the dwell duration of every cell in the pattern (indices `0` to `P.L - 1`) to a value between `lo` and `hi` (inclusive). `START`/`END` are ignored. Bounds are clamped to at least `1` and swapped if `lo > hi`. No return value."
 
 ["PN.D.RND"]
 prototype = "PN.D.RND x lo hi"
-short = "randomise every cell duration in pattern `x`'s window to between `lo` and `hi`"
+short = "randomise every cell duration in pattern `x` to between `lo` and `hi`"
 description = "As `P.D.RND`, but for pattern `x`."
+
+["P.D.RND.M"]
+prototype = "P.D.RND.M n"
+short = "randomise the working pattern's cell durations so the whole cycle sums to a multiple of `n`"
+description = "Randomly split the pattern's total dwell time across its cells so the whole cycle sums to a multiple of `n` -- the smallest one that is at least `P.L` (so it equals `n` unless the pattern is longer than `n`). Every cell stays at least `1`. Handy for locking a pattern's cycle to a musical tick count. No return value."
+
+["PN.D.RND.M"]
+prototype = "PN.D.RND.M x n"
+short = "randomise pattern `x`'s cell durations so the whole cycle sums to a multiple of `n`"
+description = "As `P.D.RND.M`, but for pattern `x`."
+
+["P.D.RND.N"]
+prototype = "P.D.RND.N n"
+short = "randomise the working pattern's cell durations so the whole cycle sums to exactly `n`"
+description = "Randomly split the pattern's total dwell time across its cells so the whole cycle sums to exactly `n`, every cell at least `1`. Does nothing if `n` is smaller than `P.L` (impossible). No return value."
+
+["PN.D.RND.N"]
+prototype = "PN.D.RND.N x n"
+short = "randomise pattern `x`'s cell durations so the whole cycle sums to exactly `n`"
+description = "As `P.D.RND.N`, but for pattern `x`."

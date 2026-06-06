@@ -138,6 +138,10 @@
         "PN.D.HERE"   => { MATCH_OP(E_OP_PN_D_HERE); };
         "P.D.RND"     => { MATCH_OP(E_OP_P_D_RND); };
         "PN.D.RND"    => { MATCH_OP(E_OP_PN_D_RND); };
+        "P.D.RND.M"   => { MATCH_OP(E_OP_P_D_RND_M); };
+        "PN.D.RND.M"  => { MATCH_OP(E_OP_PN_D_RND_M); };
+        "P.D.RND.N"   => { MATCH_OP(E_OP_P_D_RND_N); };
+        "PN.D.RND.N"  => { MATCH_OP(E_OP_PN_D_RND_N); };
         "P.STEP"      => { MATCH_OP(E_OP_P_STEP); };
         "PN.STEP"     => { MATCH_OP(E_OP_PN_STEP); };
         "P.STEP.NEW"  => { MATCH_OP(E_OP_P_STEP_NEW); };
