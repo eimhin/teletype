@@ -299,6 +299,7 @@
         "SCALE0"      => { MATCH_OP(E_OP_SCALE0); };
         "SCL0"        => { MATCH_OP(E_OP_SCL0); };
         "N"           => { MATCH_OP(E_OP_N); };
+        "OCT"         => { MATCH_OP(E_OP_OCT); };
         "VN"          => { MATCH_OP(E_OP_VN); };
         "HZ"          => { MATCH_OP(E_OP_HZ); };
         "N.S"         => { MATCH_OP(E_OP_N_S); };

@@ -260,6 +260,7 @@ typedef enum {
     E_OP_SCALE0,
     E_OP_SCL0,
     E_OP_N,
+    E_OP_OCT,
     E_OP_VN,
     E_OP_HZ,
     E_OP_N_S,

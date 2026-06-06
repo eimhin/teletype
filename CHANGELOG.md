@@ -2,6 +2,7 @@
 
 ## v5.0.0
 
+- **NEW**: new op: `OCT` — random octave jump (`OCT in oct prob`, returns a note number)
 - **FIX**: fix off-by-one error in `P.ROT` understanding of pattern length
 - **FIX**: fix `CROW.Q3` calls `ii.self.query2` instead of `ii.self.query3`
 - **FIX**: cache currently-running commands to avoid corruption during SCENE ops.

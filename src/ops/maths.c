@@ -21,6 +21,8 @@ static void op_MOD_get(const void *data, scene_state_t *ss, exec_state_t *es,
                        command_state_t *cs);
 static void op_RAND_get(const void *data, scene_state_t *ss, exec_state_t *es,
                         command_state_t *cs);
+static void op_OCT_get(const void *data, scene_state_t *ss, exec_state_t *es,
+                       command_state_t *cs);
 static void op_RRAND_get(const void *data, scene_state_t *ss, exec_state_t *es,
                          command_state_t *cs);
 static void op_SRND_get(const void *data, scene_state_t *ss, exec_state_t *es,
@@ -211,6 +213,7 @@ const tele_op_t op_MUL   = MAKE_GET_OP(MUL     , op_MUL_get     , 2, true);
 const tele_op_t op_DIV   = MAKE_GET_OP(DIV     , op_DIV_get     , 2, true);
 const tele_op_t op_MOD   = MAKE_GET_OP(MOD     , op_MOD_get     , 2, true);
 const tele_op_t op_RAND  = MAKE_GET_OP(RAND    , op_RAND_get    , 1, true);
+const tele_op_t op_OCT   = MAKE_GET_OP(OCT     , op_OCT_get     , 3, true);
 const tele_op_t op_RND   = MAKE_GET_OP(RND     , op_RAND_get    , 1, true);
 const tele_op_t op_RRAND = MAKE_GET_OP(RRAND   , op_RRAND_get   , 2, true);
 const tele_op_t op_RRND  = MAKE_GET_OP(RRND    , op_RRAND_get   , 2, true);
@@ -525,6 +528,38 @@ static void op_RAND_get(const void *NOTUSED(data), scene_state_t *ss,
         cs_push(cs, random_next(r));
     else
         cs_push(cs, random_next(r) % (a + 1));
+}
+
+static void op_OCT_get(const void *NOTUSED(data), scene_state_t *ss,
+                       exec_state_t *NOTUSED(es), command_state_t *cs) {
+    int16_t in = cs_pop(cs);
+    int16_t oct = cs_pop(cs);
+    int16_t prob = cs_pop(cs);
+
+    // clamp octave bound to [-2, 2], take magnitude
+    if (oct > 2)
+        oct = 2;
+    else if (oct < -2)
+        oct = -2;
+    int16_t bound = oct < 0 ? -oct : oct;
+
+    // clamp probability to [0, 100]
+    if (prob < 0)
+        prob = 0;
+    else if (prob > 100)
+        prob = 100;
+
+    random_state_t *prob_r = &ss->rand_states.s.prob.rand;
+    bool fire = (prob >= 100) || ((int16_t)(random_next(prob_r) % 100) < prob);
+
+    int16_t offset = 0;
+    if (fire && bound > 0) {
+        random_state_t *spray_r = &ss->rand_states.s.rand.rand;
+        // random whole octave in [-bound, +bound]
+        offset = (int16_t)(random_next(spray_r) % (2 * bound + 1)) - bound;
+    }
+
+    cs_push(cs, in + offset * 12);
 }
 
 static int16_t push_random(int16_t a, int16_t b, scene_state_t *ss) {
