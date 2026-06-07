@@ -22,10 +22,12 @@
 #define STACK_OP_SIZE 16
 #define PATTERN_COUNT 8
 #define PATTERN_LENGTH 64
-// XP custom pattern: a single 8-column wide, 16-step deep grid. Each column is
-// an independent track with its own idx/len/wrap/start/end (mirrors the 8
-// PATTERN_COUNT patterns), but they share one tracker view and one depth.
-#define CUSTOM_PATTERN_WIDTH 8
+// XP custom pattern: a single 7-column wide, 16-step deep grid. Each column is
+// an independent track with its own idx/len/wrap/start/end (like the P family,
+// though fewer than the 8 PATTERN_COUNT patterns), but they share one tracker
+// view and one depth. 7 columns leaves the custom tracker room for 3-digit
+// values per column.
+#define CUSTOM_PATTERN_WIDTH 7
 #define CUSTOM_PATTERN_LENGTH 16
 #define SCRIPT_MAX_COMMANDS 6
 #define EXEC_DEPTH 8
@@ -279,9 +281,9 @@ typedef union {
 } scene_rand_t;
 
 // XP custom pattern. One global instance per scene. Per-column metadata
-// arrays (len/wrap/start/end persisted, idx runtime like the P family), plus a
-// shared [index][column] value grid. Edited from the custom tracker view and
-// the XP op family.
+// arrays (len/wrap/start/end persisted, idx runtime like the P family), plus
+// shared [index][column] value and duration grids. Edited from the custom
+// tracker view and the XP op family.
 typedef struct {
     int16_t idx[CUSTOM_PATTERN_WIDTH];
     uint16_t len[CUSTOM_PATTERN_WIDTH];
@@ -289,6 +291,7 @@ typedef struct {
     int16_t start[CUSTOM_PATTERN_WIDTH];
     int16_t end[CUSTOM_PATTERN_WIDTH];
     int16_t val[CUSTOM_PATTERN_LENGTH][CUSTOM_PATTERN_WIDTH];
+    int16_t dur[CUSTOM_PATTERN_LENGTH][CUSTOM_PATTERN_WIDTH];
 } scene_custom_pattern_t;
 
 typedef struct {
@@ -319,6 +322,12 @@ typedef struct {
     // only on the tick the idx moved (read via P.STEP.NEW).
     uint16_t p_dwell[PATTERN_COUNT];
     uint8_t p_just_advanced[PATTERN_COUNT];
+    // Per-column dwell counter and stage-change flag for the XP custom
+    // pattern's XP.STEP family. Runtime only — same semantics as the
+    // p_dwell / p_just_advanced pair above, but keyed by custom-pattern
+    // column instead of pattern number.
+    uint16_t cp_dwell[CUSTOM_PATTERN_WIDTH];
+    uint8_t cp_just_advanced[CUSTOM_PATTERN_WIDTH];
     // Per-pattern playback mode (P.MODE/P.DIR/P.STRIDE) consumed by
     // p_mode_advance. Runtime only — intentionally not persisted with
     // the scene, so scenes set these via INIT / regular scripts.
@@ -399,6 +408,9 @@ extern void ss_set_cp_end(scene_state_t *ss, size_t col, int16_t end);
 extern int16_t ss_get_cp_val(scene_state_t *ss, size_t col, size_t idx);
 extern void ss_set_cp_val(scene_state_t *ss, size_t col, size_t idx,
                           int16_t val);
+extern int16_t ss_get_cp_dur(scene_state_t *ss, size_t col, size_t idx);
+extern void ss_set_cp_dur(scene_state_t *ss, size_t col, size_t idx,
+                          int16_t dur);
 extern scene_custom_pattern_t *ss_custom_pattern_ptr(scene_state_t *ss);
 extern size_t ss_custom_pattern_size(void);
 

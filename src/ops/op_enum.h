@@ -1026,6 +1026,15 @@ typedef enum {
     E_OP_XP_END,
     E_OP_XP_NEXT,
     E_OP_XP_NEXT_ALL,
+    E_OP_XP_D,
+    E_OP_XP_D_HERE,
+    E_OP_XP_D_RND,
+    E_OP_XP_D_RND_M,
+    E_OP_XP_D_RND_N,
+    E_OP_XP_STEP,
+    E_OP_XP_STEP_NEW,
+    E_OP_XP_STEPQ,
+    E_OP_XP_STEP_ALL,
     E_OP__LENGTH,
 } tele_op_idx_t;
 

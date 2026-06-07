@@ -3,7 +3,7 @@ prototype = "XP c i"
 prototype_set = "XP c i x"
 short = "get/set the value at column `c`, index `i` of the custom pattern"
 description = """
-Get or set the value at column `c` (0..7), index `i` (0..15) of the single global custom pattern (8 columns × 16 steps). Column first, then index — mirroring `PN <pattern> <index>`. `c` is clamped to a valid column and `i` to the column's length (negative indices count from the end, as with `P`).
+Get or set the value at column `c` (0..6), index `i` (0..15) of the single global custom pattern (7 columns × 16 steps). Column first, then index — mirroring `PN <pattern> <index>`. `c` is clamped to a valid column and `i` to the column's length (negative indices count from the end, as with `P`).
 
 ```
 XP 0 0 60     // column 0, step 0 = 60
@@ -62,11 +62,94 @@ Advance column `c`'s playhead one step — honouring that column's `XP.START`, `
 prototype = "XP.NEXT.ALL"
 short = "advance every column's index by one step"
 description = """
-Advance all eight columns' playheads by one step each, every column honouring its own start/end/wrap. Returns nothing. Use it to step a whole chord or a bank of parallel sequences from one trigger, then read the columns with `XP.HERE 0`, `XP.HERE 1`, ….
+Advance all seven columns' playheads by one step each, every column honouring its own start/end/wrap. Returns nothing. Use it to step a whole chord or a bank of parallel sequences from one trigger, then read the columns with `XP.HERE 0`, `XP.HERE 1`, ….
 
 ```
 #1
-XP.NEXT.ALL                    // step all 8 columns
+XP.NEXT.ALL                    // step all 7 columns
 I2M.NT XP.HERE 0 100 500       // voice 0's new note, vel 100, 500ms
+```
+"""
+
+["XP.D"]
+prototype = "XP.D c i"
+prototype_set = "XP.D c i x"
+short = "get/set column `c`'s per-cell dwell duration at index `i`"
+description = """
+Get or set the per-cell dwell duration (in ticks) used by `XP.STEP`, for column `c` (0..6) at index `i`. Durations below 1 are clamped to 1, so a cell can never freeze the sequencer. Mirrors `PN.D`, with the column first.
+
+```
+XP.D 0 0 3    // column 0, step 0 dwells for 3 ticks
+XP.D 0 0      // -> 3
+```
+"""
+
+["XP.D.HERE"]
+prototype = "XP.D.HERE c"
+prototype_set = "XP.D.HERE c x"
+short = "get/set column `c`'s dwell duration at its current index"
+description = """
+Get or set the dwell duration at column `c`'s current playhead index (the one `XP.STEP` / `XP.I` track). Equivalent to `XP.D c (XP.I c)`. Clamped to at least 1.
+"""
+
+["XP.D.RND"]
+prototype = "XP.D.RND c x y"
+short = "randomise column `c`'s durations to between `x` and `y`"
+description = """
+Randomise the dwell duration of every cell in column `c` (indices 0 to `XP.L c` - 1) to a value between `x` and `y` inclusive. `XP.START` / `XP.END` are ignored. Bounds are clamped to at least 1 and swapped if `x > y`. No return value. Draws from the same rng stream as the `P.D.RND` family.
+"""
+
+["XP.D.RND.M"]
+prototype = "XP.D.RND.M c n"
+short = "randomise column `c`'s durations to sum to a multiple of `n`"
+description = """
+Randomly split column `c`'s total dwell time across its cells so the whole cycle sums to a multiple of `n` — the smallest one that is at least `XP.L c` (so it equals `n` unless the column is longer than `n`). Every cell stays at least 1. No return value.
+"""
+
+["XP.D.RND.N"]
+prototype = "XP.D.RND.N c n"
+short = "randomise column `c`'s durations to sum to exactly `n`"
+description = """
+Randomly split column `c`'s total dwell time across its cells so the whole cycle sums to exactly `n`, every cell at least 1. Does nothing if `n` is smaller than `XP.L c` (impossible). No return value.
+"""
+
+["XP.STEP"]
+prototype = "XP.STEP c"
+short = "advance column `c` by one tick, honouring durations"
+description = """
+Advance column `c`'s playhead by one tick, honouring the cell durations (`XP.D`) along with `XP.START`, `XP.END`, `XP.WRAP` and `XP.L`, then return the value at the resulting index. The playhead only moves to a new cell once the current cell's duration has elapsed; until then `XP.STEP` returns the same value (dwelling). The column-first counterpart of `PN.STEP`.
+
+```
+XP.D 0 0 2
+XP.STEP 0     // -> step 0's value (dwell 1 of 2)
+XP.STEP 0     // -> step 0's value (dwell 2 of 2)
+XP.STEP 0     // -> step 1's value (advanced)
+```
+"""
+
+["XP.STEP.NEW"]
+prototype = "XP.STEP.NEW c"
+short = "did column `c`'s last XP.STEP move to a new cell?"
+description = """
+Passive query: returns 1 if the most recent `XP.STEP c` just moved to a new cell (including the first step after init or an `XP.I` reset), else 0. Does not advance the playhead. Mirrors `PN.STEP.NEW`.
+"""
+
+["XP.STEP?"]
+prototype = "XP.STEP? c"
+short = "advance column `c` and return whether it moved to a new cell"
+description = """
+Advance column `c` like `XP.STEP`, but return the just-advanced flag (1 if the playhead entered a new cell, else 0) instead of the value. Lets a script gate in one op: `IF XP.STEP? 0: SCRIPT 2`. Mirrors `PN.STEP?`.
+"""
+
+["XP.STEP.ALL"]
+prototype = "XP.STEP.ALL"
+short = "advance every column by one tick, honouring durations"
+description = """
+Dwell-step all seven columns at once, each honouring its own durations and start/end/wrap — the duration-aware counterpart to `XP.NEXT.ALL`. Returns nothing. Read each column afterwards with `XP.HERE` / `XP.STEP.NEW`.
+
+```
+#1
+XP.STEP.ALL                    // dwell-step all 7 columns
+I2M.NT XP.HERE 0 100 500       // voice 0's note when its column advances
 ```
 """

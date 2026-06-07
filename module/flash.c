@@ -18,7 +18,10 @@
 // P.STEP family — wipes existing scenes on first boot.
 // 0x26: nvram_scene_t gained scene_custom_pattern_t (the XP 8-column x 16-step
 // custom pattern) — wipes existing scenes on first boot.
-#define FIRSTRUN_KEY 0x26
+// 0x27: XP custom pattern narrowed to 7 columns and gained a per-cell dur[]
+// grid (for the XP.D / XP.STEP duration family) — both change
+// scene_custom_pattern_t's layout, so wipe existing scenes on first boot.
+#define FIRSTRUN_KEY 0x27
 
 static grid_data_t grid_data;
 

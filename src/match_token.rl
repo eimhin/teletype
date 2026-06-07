@@ -266,6 +266,15 @@
         "XP.END"      => { MATCH_OP(E_OP_XP_END); };
         "XP.I"        => { MATCH_OP(E_OP_XP_I); };
         "XP.L"        => { MATCH_OP(E_OP_XP_L); };
+        "XP.D.RND.M"  => { MATCH_OP(E_OP_XP_D_RND_M); };
+        "XP.D.RND.N"  => { MATCH_OP(E_OP_XP_D_RND_N); };
+        "XP.D.RND"    => { MATCH_OP(E_OP_XP_D_RND); };
+        "XP.D.HERE"   => { MATCH_OP(E_OP_XP_D_HERE); };
+        "XP.D"        => { MATCH_OP(E_OP_XP_D); };
+        "XP.STEP.ALL" => { MATCH_OP(E_OP_XP_STEP_ALL); };
+        "XP.STEP.NEW" => { MATCH_OP(E_OP_XP_STEP_NEW); };
+        "XP.STEP?"    => { MATCH_OP(E_OP_XP_STEPQ); };
+        "XP.STEP"     => { MATCH_OP(E_OP_XP_STEP); };
         "XP"          => { MATCH_OP(E_OP_XP); };
         "AVG"         => { MATCH_OP(E_OP_AVG); };
         "EQ"          => { MATCH_OP(E_OP_EQ); };

@@ -30,6 +30,8 @@ void ss_init(scene_state_t *ss) {
     memset(ss->p_acc_count, 0, sizeof(ss->p_acc_count));
     memset(ss->p_dwell, 0, sizeof(ss->p_dwell));
     memset(ss->p_just_advanced, 0, sizeof(ss->p_just_advanced));
+    memset(ss->cp_dwell, 0, sizeof(ss->cp_dwell));
+    memset(ss->cp_just_advanced, 0, sizeof(ss->cp_just_advanced));
     ss->ca_row = 1u << 16;  // CA: single centre cell (see scene_state_t)
     memset(&ss->scripts, 0, ss_scripts_size(TOTAL_SCRIPT_COUNT));
     turtle_init(&ss->turtle);
@@ -131,8 +133,10 @@ void ss_custom_pattern_init(scene_state_t *ss) {
         cp->end[col] = CUSTOM_PATTERN_LENGTH - 1;
     }
     for (size_t i = 0; i < CUSTOM_PATTERN_LENGTH; i++)
-        for (size_t col = 0; col < CUSTOM_PATTERN_WIDTH; col++)
+        for (size_t col = 0; col < CUSTOM_PATTERN_WIDTH; col++) {
             cp->val[i][col] = 0;
+            cp->dur[i][col] = 1;
+        }
 }
 
 // grid
@@ -414,6 +418,15 @@ int16_t ss_get_cp_val(scene_state_t *ss, size_t col, size_t idx) {
 
 void ss_set_cp_val(scene_state_t *ss, size_t col, size_t idx, int16_t val) {
     ss->custom_pattern.val[idx][col] = val;
+}
+
+int16_t ss_get_cp_dur(scene_state_t *ss, size_t col, size_t idx) {
+    return ss->custom_pattern.dur[idx][col];
+}
+
+void ss_set_cp_dur(scene_state_t *ss, size_t col, size_t idx, int16_t dur) {
+    if (dur < 1) dur = 1;  // a 0-duration cell would freeze the sequencer
+    ss->custom_pattern.dur[idx][col] = dur;
 }
 
 scene_custom_pattern_t *ss_custom_pattern_ptr(scene_state_t *ss) {

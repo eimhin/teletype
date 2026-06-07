@@ -341,7 +341,10 @@ const tele_op_t *tele_ops[E_OP__LENGTH] = {
 
     // custom pattern (XP)
     &op_XP, &op_XP_HERE, &op_XP_I, &op_XP_L, &op_XP_WRAP, &op_XP_START,
-    &op_XP_END, &op_XP_NEXT, &op_XP_NEXT_ALL
+    &op_XP_END, &op_XP_NEXT, &op_XP_NEXT_ALL,
+    // custom pattern durations (XP.D / XP.STEP family)
+    &op_XP_D, &op_XP_D_HERE, &op_XP_D_RND, &op_XP_D_RND_M, &op_XP_D_RND_N,
+    &op_XP_STEP, &op_XP_STEP_NEW, &op_XP_STEPQ, &op_XP_STEP_ALL
 };
 
 /////////////////////////////////////////////////////////////////

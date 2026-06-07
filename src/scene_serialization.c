@@ -11,6 +11,7 @@
 #define STATE_GRID 5
 #define STATE_PATTERN_DURATIONS 6
 #define STATE_CUSTOM_PATTERN 7
+#define STATE_CUSTOM_PATTERN_DURATIONS 8
 
 uint8_t grid_state = 0;
 uint16_t grid_count = 0;
@@ -236,6 +237,37 @@ void serialize_scene(tt_serializer_t* stream, scene_state_t* scene,
         }
     }
 
+    // custom pattern durations (#E). CUSTOM_PATTERN_LENGTH rows of
+    // CUSTOM_PATTERN_WIDTH tab-separated dwell values — same table shape as #D.
+    // Only emitted when any cell holds a non-default duration (default 1), so
+    // existing presets round-trip byte-identically and older firmware skips the
+    // unknown #E section.
+    bool any_cp_dur_set = false;
+    for (int b = 0; b < CUSTOM_PATTERN_WIDTH && !any_cp_dur_set; b++) {
+        for (int l = 0; l < CUSTOM_PATTERN_LENGTH; l++) {
+            if (ss_get_cp_dur(scene, b, l) != 1) {
+                any_cp_dur_set = true;
+                break;
+            }
+        }
+    }
+    if (any_cp_dur_set) {
+        stream->write_char(stream->data, '\n');
+        stream->write_char(stream->data, '#');
+        stream->write_char(stream->data, 'E');
+        stream->write_char(stream->data, '\n');
+
+        for (int l = 0; l < CUSTOM_PATTERN_LENGTH; l++) {
+            for (int b = 0; b < CUSTOM_PATTERN_WIDTH; b++) {
+                itoa(ss_get_cp_dur(scene, b, l), input, 10);
+                stream->write_buffer(stream->data, (uint8_t*)input,
+                                     strlen(input));
+                stream->write_char(stream->data,
+                                   b == CUSTOM_PATTERN_WIDTH - 1 ? '\n' : '\t');
+            }
+        }
+    }
+
     // serialize grid
 
     char fvalue[36];
@@ -323,6 +355,7 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
             else if (c == 'P') { s2 = STATE_PATTERNS; }
             else if (c == 'D') { s2 = STATE_PATTERN_DURATIONS; }
             else if (c == 'C') { s2 = STATE_CUSTOM_PATTERN; }
+            else if (c == 'E') { s2 = STATE_CUSTOM_PATTERN_DURATIONS; }
             else if (c == 'G') {
                 grid_state = grid_count = 0;
                 s2 = STATE_GRID;
@@ -540,6 +573,36 @@ void deserialize_scene(tt_deserializer_t* stream, scene_state_t* scene,
                 if (c == '\n') {
                     if (p) l++;
                     if (l > 4 + CUSTOM_PATTERN_LENGTH) s = -1;
+                    b = 0;
+                    p = 0;
+                }
+            }
+            else {
+                if (c == '-')
+                    neg = -1;
+                else if (c >= '0' && c <= '9') { num = num * 10 + (c - 48); }
+                p++;
+            }
+            continue;
+        }
+
+        // CUSTOM PATTERN DURATIONS (#E)
+        if (s == STATE_CUSTOM_PATTERN_DURATIONS) {
+            // CUSTOM_PATTERN_LENGTH rows of CUSTOM_PATTERN_WIDTH tab-separated
+            // dur values, no header. Mirrors the #D parser.
+
+            if (c == '\n' || c == '\t') {
+                if (b < CUSTOM_PATTERN_WIDTH && l < CUSTOM_PATTERN_LENGTH) {
+                    ss_set_cp_dur(scene, b, l, neg * num);
+                }
+
+                b++;
+                num = 0;
+                neg = 1;
+
+                if (c == '\n') {
+                    if (p) l++;
+                    if (l >= CUSTOM_PATTERN_LENGTH) s = -1;
                     b = 0;
                     p = 0;
                 }
