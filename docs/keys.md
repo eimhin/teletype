@@ -12,9 +12,8 @@ These bindings work everywhere.
 | **`alt-<esc>`**                      | preset write mode                              |
 | **`win-<esc>`**                      | clear delays, stack and slews                  |
 | **`shift-alt-?`** / **`alt-h`**      | help text, or return to last mode              |
-| **`<F1>`** to **`<F8>`**             | run corresponding script                       |
-| **`<F9>`**                           | run metro script                               |
-| **`<F10>`**                          | run init script                                |
+| **`<F1>`** to **`<F10>`**            | run corresponding script (1-10)                |
+| **`<insert>`**                       | run init script                                |
 | **`alt-<F1>`** to **`alt-<F8>`**     | edit corresponding script                      |
 | **`alt-<F9>`**                       | edit metro script                              |
 | **`alt-<F10>`**                      | edit init script                               |

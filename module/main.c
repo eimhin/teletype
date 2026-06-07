@@ -908,18 +908,13 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
         else { set_mode(M_HELP); }
         return true;
     }
-    // <F1> through <F8>: run corresponding script
-    else if (no_mod(m) && k >= HID_F1 && k <= HID_F8) {
+    // <F1> through <F10>: run corresponding script (1-10)
+    else if (no_mod(m) && k >= HID_F1 && k <= HID_F10) {
         run_script(&scene_state, k - HID_F1);
         return true;
     }
-    // <F9>: run metro script
-    else if (no_mod(m) && k == HID_F9) {
-        run_script(&scene_state, METRO_SCRIPT);
-        return true;
-    }
-    // <F10>: run init script
-    else if (no_mod(m) && k == HID_F10) {
+    // <insert>: run the init script
+    else if (match_no_mod(m, k, HID_INSERT)) {
         run_script(&scene_state, INIT_SCRIPT);
         return true;
     }
