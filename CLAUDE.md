@@ -79,15 +79,15 @@ Other notable `src/` subsystems beyond the parse/eval pipeline: `turtle.c` (grid
 
 ## Flash budget
 
-AT32UC3B0512 has 512 KB flash. `module/config.mk:261` reserves the top of flash for scene storage via `--defsym=__flash_nvram_size__` (current value is the lever to tune; upstream reduced it from the linker default 256 KB to 200 KB in 2021 to free code flash). The `.flash_nvram` section holds `nvram_data_t` (`SCENE_SLOTS × nvram_scene_t + tail`), and the rest of flash is for `.text`/`.rodata`/`.data`.
+AT32UC3B0512 has 512 KB flash. `module/config.mk:265` reserves the top of flash for scene storage via `--defsym=__flash_nvram_size__` (current value is the lever to tune; upstream reduced it from the linker default 256 KB to 200 KB in 2021 to free code flash). The `.flash_nvram` section holds `nvram_data_t` (`SCENE_SLOTS × nvram_scene_t + tail`), and the rest of flash is for `.text`/`.rodata`/`.data`.
 
-Per-scene size is ~12 KB at present, so any field added inside `nvram_scene_t` is multiplied by `SCENE_SLOTS`. Reducing `SCENE_SLOTS` alone does not free code flash — you must also reduce `__flash_nvram_size__` to push the NVRAM region up.
+Per-scene size is ~13.5 KB at present (`.flash_nvram` is `0x218d0` ≈ 134.7 KB across `SCENE_SLOTS = 10`), so any field added inside `nvram_scene_t` is multiplied by `SCENE_SLOTS`. Reducing `SCENE_SLOTS` alone does not free code flash — you must also reduce `__flash_nvram_size__` to push the NVRAM region up.
 
 **Adjusting `__flash_nvram_size__`:** the reservation must be ≥ actual `.flash_nvram` size. Workflow when you add per-scene state (more patterns, more scripts, new fields in `nvram_scene_t`, etc.):
 
 1. Build with the existing reservation. If it fails with "section `.flash_nvram` will not fit in region FLASH", the reservation is too small — bump it up.
 2. After a successful build, measure the actual section size: `avr32-objdump -h module/teletype.elf | grep flash_nvram` (size column is hex bytes).
-3. Set the reservation to a clean round number ≥ that size, with whatever slack you want for future growth. Past values: 256K (linker default), 200K (2021 upstream), 176K (current).
+3. Set the reservation to a clean round number ≥ that size, with whatever slack you want for future growth. Past values: 256K (linker default), 200K (2021 upstream), 176K, 156K (current).
 
 No runtime risk from a too-small reservation — the link fails loudly. The risk of a too-large reservation is just code-flash headroom you're not using.
 
