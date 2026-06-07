@@ -955,6 +955,14 @@ bool process_global_keys(uint8_t k, uint8_t m, bool is_held_key) {
         tele_metro_updated();
         return true;
     }
+    // <pause/break>: enable metro if it is not already running (never disables)
+    else if (match_no_mod(m, k, HID_PAUSE)) {
+        if (!scene_state.variables.m_act) {
+            scene_state.variables.m_act = 1;
+            tele_metro_updated();
+        }
+        return true;
+    }
     // <numpad-1> through <numpad-8>: run corresponding script
     else if (no_mod(m) && k >= HID_KEYPAD_1 && k <= HID_KEYPAD_8) {
         run_script(&scene_state, k - HID_KEYPAD_1);
