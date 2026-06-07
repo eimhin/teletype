@@ -57,6 +57,9 @@ FEATURE_GROUPS = [
     ("Custom pattern", [
         "XP", "XP.HERE", "XP.I", "XP.L", "XP.WRAP", "XP.START", "XP.END",
         "XP.NEXT", "XP.NEXT.ALL"]),
+    ("Custom pattern stages", [
+        "XP.STEP", "XP.STEP.NEW", "XP.STEP?", "XP.STEP.ALL",
+        "XP.D", "XP.D.HERE", "XP.D.RND", "XP.D.RND.M", "XP.D.RND.N"]),
     ("Chord / Key", [
         "KEY", "KEY.C", "KEY.V"]),
 ]
